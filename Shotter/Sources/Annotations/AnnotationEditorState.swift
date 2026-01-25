@@ -16,6 +16,9 @@ class AnnotationEditorState: ObservableObject {
     @Published var editingTextAnnotationId: AnnotationID?
     @Published var nextCounterNumber: Int = 1
     
+    // Modifier keys
+    var isShiftKeyHeld: Bool = false
+    
     // Recent colors
     @Published var recentColors: [NSColor] = [
         .systemRed, .systemOrange, .systemYellow,

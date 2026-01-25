@@ -452,10 +452,36 @@ struct ToolOptionsBar: View {
             }
             
             Spacer()
+            
+            // Keyboard shortcut hints
+            Text(keyboardHint)
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+    
+    private var keyboardHint: String {
+        switch state.currentToolType {
+        case .select:
+            return "Click to select • Drag to move • Delete to remove"
+        case .arrow:
+            return "Drag to draw arrow"
+        case .rectangle:
+            return "Drag to draw rectangle • Hold ⇧ for square"
+        case .ellipse:
+            return "Drag to draw ellipse • Hold ⇧ for circle"
+        case .line:
+            return "Drag to draw line"
+        case .text:
+            return "Click to place text"
+        case .blur:
+            return "Drag to blur region"
+        case .counter:
+            return "Click to place counter"
+        }
     }
 }
 

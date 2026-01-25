@@ -278,6 +278,10 @@ class AnnotationCanvasView: NSView {
         let viewPoint = convert(event.locationInWindow, from: nil)
         let imagePoint = viewPointToImagePoint(viewPoint)
         
+        // Pass shift key state for constrained shapes
+        let isShiftHeld = event.modifierFlags.contains(.shift)
+        state.isShiftKeyHeld = isShiftHeld
+        
         state.currentTool.mouseDragged(to: imagePoint, state: state)
         needsDisplay = true
     }

@@ -257,11 +257,21 @@ class RectangleTool: AnnotationTool {
     func mouseDragged(to point: CGPoint, state: AnnotationEditorState) {
         guard var annotation = currentAnnotation, let start = startPoint else { return }
         
+        var width = abs(point.x - start.x)
+        var height = abs(point.y - start.y)
+        
+        // Constrain to square if shift is held
+        if state.isShiftKeyHeld {
+            let size = max(width, height)
+            width = size
+            height = size
+        }
+        
         let bounds = CGRect(
-            x: min(start.x, point.x),
-            y: min(start.y, point.y),
-            width: abs(point.x - start.x),
-            height: abs(point.y - start.y)
+            x: point.x < start.x ? start.x - width : start.x,
+            y: point.y < start.y ? start.y - height : start.y,
+            width: width,
+            height: height
         )
         annotation.bounds = bounds
         state.updateAnnotation(annotation)
@@ -310,11 +320,21 @@ class EllipseTool: AnnotationTool {
     func mouseDragged(to point: CGPoint, state: AnnotationEditorState) {
         guard var annotation = currentAnnotation, let start = startPoint else { return }
         
+        var width = abs(point.x - start.x)
+        var height = abs(point.y - start.y)
+        
+        // Constrain to circle if shift is held
+        if state.isShiftKeyHeld {
+            let size = max(width, height)
+            width = size
+            height = size
+        }
+        
         let bounds = CGRect(
-            x: min(start.x, point.x),
-            y: min(start.y, point.y),
-            width: abs(point.x - start.x),
-            height: abs(point.y - start.y)
+            x: point.x < start.x ? start.x - width : start.x,
+            y: point.y < start.y ? start.y - height : start.y,
+            width: width,
+            height: height
         )
         annotation.bounds = bounds
         state.updateAnnotation(annotation)
