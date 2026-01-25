@@ -82,21 +82,24 @@ class OverlayWindow: NSPanel {
         onAnnotate: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
-        // Calculate position (bottom-left with padding)
+        // Calculate size based on image, capped at maxWidth
         guard NSScreen.main != nil else {
             super.init(
                 contentRect: .zero,
-                styleMask: [.borderless, .nonactivatingPanel],
+                styleMask: [.borderless, .nonactivatingPanel, .hudWindow],
                 backing: .buffered,
                 defer: false
             )
             return
         }
-        
-        let overlayWidth: CGFloat = 300
-        let overlayHeight: CGFloat = 100
+
+        let maxWidth: CGFloat = 280
         let padding: CGFloat = 20
-        
+        let imageSize = image.size
+        let aspectRatio = imageSize.height / imageSize.width
+        let overlayWidth = min(imageSize.width, maxWidth)
+        let overlayHeight = overlayWidth * aspectRatio
+
         let frame = NSRect(
             x: padding,
             y: padding,
@@ -110,7 +113,7 @@ class OverlayWindow: NSPanel {
             backing: .buffered,
             defer: false
         )
-        
+
         // Configure panel
         self.isFloatingPanel = true
         self.level = .floating
@@ -119,6 +122,8 @@ class OverlayWindow: NSPanel {
         self.hasShadow = true
         self.isMovableByWindowBackground = true
         self.hidesOnDeactivate = false
+        self.contentMinSize = NSSize(width: overlayWidth, height: overlayHeight)
+        self.contentMaxSize = NSSize(width: overlayWidth, height: overlayHeight)
         
         // Create SwiftUI view
         let overlayView = OverlayView(
@@ -131,11 +136,10 @@ class OverlayWindow: NSPanel {
         )
         
         hostingView = NSHostingView(rootView: overlayView)
+        hostingView?.wantsLayer = true
+        hostingView?.layer?.backgroundColor = NSColor.clear.cgColor
         hostingView?.frame = NSRect(x: 0, y: 0, width: overlayWidth, height: overlayHeight)
         self.contentView = hostingView
-        
-        // Enable dragging the image out
-        self.registerForDraggedTypes([.fileURL, .png, .tiff])
     }
     
     func show() {
@@ -182,83 +186,87 @@ struct OverlayView: View {
     let onDismiss: () -> Void
 
     @State private var isHovering = false
-    
+
     var body: some View {
-        HStack(spacing: 12) {
-            // Thumbnail
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 80, height: 60)
-                .cornerRadius(6)
-                .shadow(radius: 2)
-                .onDrag {
-                    // Enable drag and drop
-                    let provider = NSItemProvider(object: image)
-                    return provider
+        let rounded = RoundedRectangle(cornerRadius: 10, style: .continuous)
+
+        // Image drives the size
+        Image(nsImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .clipShape(rounded)
+            .overlay(rounded.stroke(Color.white.opacity(0.2), lineWidth: 1))
+            .overlay(alignment: .topTrailing) {
+                // Floating action bar (top-right, inside image)
+                VStack(spacing: 8) {
+                    OverlayActionButton(systemName: "doc.on.doc", action: onCopy)
+                        .help("Copy")
+                    OverlayActionButton(systemName: "folder", action: onSave, disabled: savedURL == nil)
+                        .help("Show in Finder")
+                    OverlayActionButton(systemName: "pencil.tip.crop.circle", action: onAnnotate)
+                        .help("Annotate")
                 }
-            
-            // Action buttons
-            VStack(alignment: .leading, spacing: 6) {
-                Button(action: onCopy) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(OverlayButtonStyle())
-                
-                Button(action: onSave) {
-                    Label("Show in Finder", systemImage: "folder")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(OverlayButtonStyle(disabled: savedURL == nil))
-                .disabled(savedURL == nil)
-                
-                Button(action: onAnnotate) {
-                    Label("Annotate", systemImage: "pencil.tip.crop.circle")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(OverlayButtonStyle())
+                .padding(6)
+                .background(ActiveVisualEffectView(material: .hudWindow))
+                .cornerRadius(8)
+                .padding(8)
+                .opacity(isHovering ? 1 : 0.7)
             }
-            .frame(width: 130)
-            
-            // Close button
-            Button(action: onDismiss) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.secondary)
+            .overlay(alignment: .topLeading) {
+                // Close button (top-left corner, inside image)
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .background(Circle().fill(Color.black.opacity(0.5)))
+                }
+                .buttonStyle(.plain)
+                .padding(10)
+                .opacity(isHovering ? 1 : 0.6)
             }
-            .buttonStyle(.plain)
-            .opacity(isHovering ? 1 : 0.5)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        )
+            .shadow(radius: 8)
+            .frame(maxWidth: 280)
         .onHover { hovering in
-            isHovering = hovering
+            withAnimation(.easeInOut(duration: 0.15)) { isHovering = hovering }
         }
     }
 }
 
-struct OverlayButtonStyle: ButtonStyle {
+struct OverlayActionButton: View {
+    let systemName: String
+    let action: () -> Void
     var disabled: Bool = false
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 11, weight: .medium))
-            .foregroundColor(disabled ? .secondary : .primary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(configuration.isPressed ? Color.white.opacity(0.2) : Color.white.opacity(0.1))
-            )
-            .opacity(disabled ? 0.6 : 1)
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 28, height: 28)
+                .foregroundColor(disabled ? .secondary : .primary)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
+        .contentShape(Rectangle())
+    }
+}
+
+struct ActiveVisualEffectView: NSViewRepresentable {
+    var material: NSVisualEffectView.Material
+    var blendingMode: NSVisualEffectView.BlendingMode = .withinWindow
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+        nsView.blendingMode = blendingMode
+        nsView.state = .active
     }
 }
 
@@ -271,6 +279,6 @@ struct OverlayButtonStyle: ButtonStyle {
         onAnnotate: {},
         onDismiss: {}
     )
-    .frame(width: 300, height: 100)
+    .padding(20)
     .background(Color.gray)
 }
