@@ -7,10 +7,16 @@ private let logger = Logger(subsystem: "com.densign.shotter", category: "Hotkeys
 class HotkeyManager {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var shortcutObserver: NSObjectProtocol?
     
     private let onFullscreen: () -> Void
     private let onArea: () -> Void
     private let onWindow: () -> Void
+    
+    // Cache shortcuts for performance
+    private var fullscreenShortcut: ShortcutConfig
+    private var areaShortcut: ShortcutConfig
+    private var windowShortcut: ShortcutConfig
     
     init(
         onFullscreen: @escaping () -> Void,
@@ -21,11 +27,39 @@ class HotkeyManager {
         self.onArea = onArea
         self.onWindow = onWindow
         
+        // Load initial shortcuts
+        let prefs = PreferencesManager.shared
+        self.fullscreenShortcut = prefs.shortcutFullscreen
+        self.areaShortcut = prefs.shortcutArea
+        self.windowShortcut = prefs.shortcutWindow
+        
         setupEventTap()
+        observeShortcutChanges()
     }
     
     deinit {
         removeEventTap()
+        if let observer = shortcutObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+    
+    private func observeShortcutChanges() {
+        shortcutObserver = NotificationCenter.default.addObserver(
+            forName: .shortcutsDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.reloadShortcuts()
+        }
+    }
+    
+    private func reloadShortcuts() {
+        let prefs = PreferencesManager.shared
+        fullscreenShortcut = prefs.shortcutFullscreen
+        areaShortcut = prefs.shortcutArea
+        windowShortcut = prefs.shortcutWindow
+        logger.info("Shortcuts reloaded")
     }
     
     private func setupEventTap() {
@@ -74,41 +108,48 @@ class HotkeyManager {
             return Unmanaged.passRetained(event)
         }
         
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
         
-        // Check for Command + Shift modifier
-        let hasCommandShift = flags.contains([.maskCommand, .maskShift]) &&
-                             !flags.contains(.maskControl) &&
-                             !flags.contains(.maskAlternate)
-        
-        guard hasCommandShift else {
-            return Unmanaged.passRetained(event)
-        }
-        
-        // Key code 20 = "3", Key code 21 = "4", Key code 23 = "5"
-        switch keyCode {
-        case 20: // ⌘⇧3 - Fullscreen
+        // Check fullscreen shortcut
+        if fullscreenShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: fullscreenShortcut) {
             DispatchQueue.main.async {
                 self.onFullscreen()
             }
             return nil // Consume the event
-            
-        case 21: // ⌘⇧4 - Area
+        }
+        
+        // Check area shortcut
+        if areaShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: areaShortcut) {
             DispatchQueue.main.async {
                 self.onArea()
             }
             return nil // Consume the event
-            
-        case 23: // ⌘⇧5 - Window
+        }
+        
+        // Check window shortcut (only if enabled - disabled by default)
+        if windowShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: windowShortcut) {
             DispatchQueue.main.async {
                 self.onWindow()
             }
             return nil // Consume the event
-            
-        default:
-            return Unmanaged.passRetained(event)
         }
+        
+        return Unmanaged.passRetained(event)
+    }
+    
+    private func matchesShortcut(keyCode: Int, flags: CGEventFlags, shortcut: ShortcutConfig) -> Bool {
+        guard keyCode == shortcut.keyCode else { return false }
+        
+        let requiredFlags = CGEventFlags(rawValue: UInt64(shortcut.modifiers))
+        
+        // Check that all required modifiers are present
+        let hasCommand = flags.contains(.maskCommand) == requiredFlags.contains(.maskCommand)
+        let hasShift = flags.contains(.maskShift) == requiredFlags.contains(.maskShift)
+        let hasOption = flags.contains(.maskAlternate) == requiredFlags.contains(.maskAlternate)
+        let hasControl = flags.contains(.maskControl) == requiredFlags.contains(.maskControl)
+        
+        return hasCommand && hasShift && hasOption && hasControl
     }
     
     private func removeEventTap() {

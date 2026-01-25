@@ -1,21 +1,44 @@
 import AppKit
+import ScreenCaptureKit
+
+/// Result of area/window selection - either an area rect or a window
+enum AreaSelectorResult {
+    case area(CGRect, NSScreen)
+    case window(SCWindow)
+    case cancelled
+}
+
+/// Selection mode for the area selector
+enum SelectionMode {
+    case area
+    case window
+}
 
 /// Manages multiple overlay windows for area selection across all displays
+/// Supports Space key to toggle to window selection mode (like native macOS)
 class AreaSelectorWindow {
     private var overlayWindows: [AreaOverlayWindow] = []
-    private var completion: ((CGRect?, NSScreen?) -> Void)?
+    private var completion: ((AreaSelectorResult) -> Void)?
     private var coordinator: AreaSelectionCoordinator?
     
-    init(completion: @escaping (CGRect?, NSScreen?) -> Void) {
+    init(completion: @escaping (AreaSelectorResult) -> Void) {
         self.completion = completion
         
         // Create coordinator to sync selection state across screens
         coordinator = AreaSelectionCoordinator()
-        coordinator?.onSelectionComplete = { [weak self] rect, screen in
-            self?.handleSelectionComplete(rect, screen: screen)
+        coordinator?.onAreaComplete = { [weak self] rect, screen in
+            self?.handleAreaComplete(rect, screen: screen)
+        }
+        coordinator?.onWindowSelected = { [weak self] window in
+            self?.handleWindowSelected(window)
         }
         coordinator?.onCancel = { [weak self] in
             self?.handleCancel()
+        }
+        
+        // Pre-fetch available windows for window mode
+        Task {
+            await coordinator?.loadWindows()
         }
         
         // Create an overlay window for each screen
@@ -32,12 +55,21 @@ class AreaSelectorWindow {
         }
     }
     
-    private func handleSelectionComplete(_ rect: CGRect, screen: NSScreen) {
+    private func handleAreaComplete(_ rect: CGRect, screen: NSScreen) {
         NSCursor.pop()
         for window in overlayWindows {
             window.orderOut(nil)
         }
-        completion?(rect, screen)
+        completion?(.area(rect, screen))
+        completion = nil
+    }
+    
+    private func handleWindowSelected(_ window: SCWindow) {
+        NSCursor.pop()
+        for window in overlayWindows {
+            window.orderOut(nil)
+        }
+        completion?(.window(window))
         completion = nil
     }
     
@@ -46,25 +78,76 @@ class AreaSelectorWindow {
         for window in overlayWindows {
             window.orderOut(nil)
         }
-        completion?(nil, nil)
+        completion?(.cancelled)
         completion = nil
     }
 }
 
 /// Coordinates selection state across multiple screens
 class AreaSelectionCoordinator {
-    var onSelectionComplete: ((CGRect, NSScreen) -> Void)?
+    var onAreaComplete: ((CGRect, NSScreen) -> Void)?
+    var onWindowSelected: ((SCWindow) -> Void)?
     var onCancel: (() -> Void)?
     
+    // Current mode
+    var mode: SelectionMode = .area {
+        didSet {
+            if mode != oldValue {
+                updateCursor()
+                updateAllViews()
+            }
+        }
+    }
+    
+    // Area selection state
     var isSelecting = false
     var selectionStart: NSPoint?
     var selectionEnd: NSPoint?
     var activeScreen: NSScreen?
     
+    // Window selection state
+    var availableWindows: [SCWindow] = []
+    var highlightedWindow: SCWindow?
+    
     // All registered views for cross-screen updates
     var views: [AreaSelectionView] = []
     
+    func loadWindows() async {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            await MainActor.run {
+                self.availableWindows = content.windows.filter { window in
+                    // Filter out system windows and tiny windows
+                    guard window.frame.width > 50 && window.frame.height > 50 else {
+                        return false
+                    }
+                    let hasTitle = window.title?.isEmpty == false
+                    let isSystemUI = (window.owningApplication?.bundleIdentifier.hasPrefix("com.apple.") ?? false)
+                        && window.title == nil
+                    return hasTitle || !isSystemUI
+                }
+            }
+        } catch {
+            // Windows will be empty, but area selection will still work
+        }
+    }
+    
+    private func updateCursor() {
+        NSCursor.pop()
+        switch mode {
+        case .area:
+            NSCursor.crosshair.push()
+        case .window:
+            NSCursor.pointingHand.push()
+        }
+    }
+    
+    func toggleMode() {
+        mode = (mode == .area) ? .window : .area
+    }
+    
     func startSelection(at point: NSPoint, screen: NSScreen) {
+        guard mode == .area else { return }
         isSelecting = true
         selectionStart = point
         selectionEnd = point
@@ -73,13 +156,13 @@ class AreaSelectionCoordinator {
     }
     
     func updateSelection(to point: NSPoint) {
-        guard isSelecting else { return }
+        guard mode == .area, isSelecting else { return }
         selectionEnd = point
         updateAllViews()
     }
     
     func endSelection(at point: NSPoint, screen: NSScreen) {
-        guard isSelecting, let start = selectionStart else { return }
+        guard mode == .area, isSelecting, let start = selectionStart else { return }
         isSelecting = false
         selectionEnd = point
         
@@ -94,10 +177,37 @@ class AreaSelectionCoordinator {
                 width: rect.width,
                 height: rect.height
             )
-            onSelectionComplete?(flippedRect, screen)
+            onAreaComplete?(flippedRect, screen)
         } else {
             onCancel?()
         }
+    }
+    
+    func handleMouseMoved(at globalPoint: NSPoint) {
+        guard mode == .window else { return }
+        highlightedWindow = findWindowAt(globalPoint)
+        updateAllViews()
+    }
+    
+    func handleClick(at globalPoint: NSPoint) {
+        if mode == .window, let window = highlightedWindow {
+            onWindowSelected?(window)
+        }
+    }
+    
+    private func findWindowAt(_ point: NSPoint) -> SCWindow? {
+        // Convert Cocoa coordinates to SCK coordinates (flip Y)
+        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
+        let sckPoint = NSPoint(x: point.x, y: mainScreenHeight - point.y)
+        
+        // Find windows that contain this point (front to back)
+        for window in availableWindows.reversed() {
+            let frame = window.frame
+            if frame.contains(sckPoint) {
+                return window
+            }
+        }
+        return nil
     }
     
     func cancel() {
@@ -105,6 +215,7 @@ class AreaSelectionCoordinator {
         selectionStart = nil
         selectionEnd = nil
         activeScreen = nil
+        highlightedWindow = nil
         onCancel?()
     }
     
@@ -116,7 +227,7 @@ class AreaSelectionCoordinator {
         return NSRect(x: x, y: y, width: width, height: height)
     }
     
-    private func updateAllViews() {
+    func updateAllViews() {
         for view in views {
             view.needsDisplay = true
             view.updateDimensionLabel()
@@ -169,6 +280,7 @@ class AreaSelectionView: NSView {
     private let screen: NSScreen
     
     private var dimensionLabel: NSTextField?
+    private var trackingArea: NSTrackingArea?
     
     override var acceptsFirstResponder: Bool { true }
     
@@ -176,13 +288,50 @@ class AreaSelectionView: NSView {
         self.screen = screen
         self.coordinator = coordinator
         super.init(frame: frame)
+        
+        // Set up tracking area for mouse moved events
+        updateTrackingArea()
     }
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
+    private func updateTrackingArea() {
+        if let existing = trackingArea {
+            removeTrackingArea(existing)
+        }
+        trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited],
+            owner: self,
+            userInfo: nil
+        )
+        if let area = trackingArea {
+            addTrackingArea(area)
+        }
+    }
+    
     override func draw(_ dirtyRect: NSRect) {
+        guard let coordinator = coordinator else {
+            // Fallback: just draw dim overlay
+            NSColor.black.withAlphaComponent(0.3).setFill()
+            bounds.fill()
+            return
+        }
+        
+        switch coordinator.mode {
+        case .area:
+            drawAreaMode()
+        case .window:
+            drawWindowMode()
+        }
+        
+        // Draw mode indicator
+        drawModeIndicator()
+    }
+    
+    private func drawAreaMode() {
         // Draw selection rectangle if selecting
         if let coordinator = coordinator,
            let start = coordinator.selectionStart,
@@ -227,31 +376,202 @@ class AreaSelectionView: NSView {
         }
     }
     
+    private func drawWindowMode() {
+        // Semi-transparent overlay
+        NSColor.black.withAlphaComponent(0.3).setFill()
+        bounds.fill()
+        
+        // Highlight the hovered window
+        if let coordinator = coordinator, let window = coordinator.highlightedWindow {
+            drawWindowHighlight(window)
+        }
+    }
+    
+    private func drawWindowHighlight(_ window: SCWindow) {
+        // Convert window frame to screen coordinates, then to view coordinates
+        let windowFrame = window.frame
+        let localFrame = convertWindowFrameToView(windowFrame)
+        
+        // Only draw if window is on this screen
+        guard localFrame.intersects(bounds) else { return }
+        
+        // Clear the window area (cut out from overlay)
+        NSColor.clear.setFill()
+        localFrame.intersection(bounds).fill()
+        
+        // Draw highlight border
+        NSColor.systemBlue.setStroke()
+        let borderPath = NSBezierPath(rect: localFrame)
+        borderPath.lineWidth = 4
+        borderPath.stroke()
+        
+        // Draw window info label
+        drawWindowLabel(window, at: localFrame)
+    }
+    
+    private func convertWindowFrameToView(_ windowFrame: CGRect) -> NSRect {
+        // ScreenCaptureKit uses top-left origin coordinates
+        // NSView uses bottom-left origin coordinates
+        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
+        let mainScreenOrigin = NSScreen.screens.first?.frame.origin ?? .zero
+        
+        // Convert from SCK coordinates (top-left origin) to Cocoa coordinates (bottom-left origin)
+        let flippedY = mainScreenHeight - windowFrame.origin.y - windowFrame.height
+        
+        // Convert to this view's coordinate space
+        let localX = windowFrame.origin.x - screen.frame.origin.x
+        let localY = flippedY - screen.frame.origin.y + mainScreenOrigin.y
+        
+        return NSRect(
+            x: localX,
+            y: localY,
+            width: windowFrame.width,
+            height: windowFrame.height
+        )
+    }
+    
+    private func drawWindowLabel(_ window: SCWindow, at frame: NSRect) {
+        let appName = window.owningApplication?.applicationName ?? "Unknown"
+        let windowTitle = window.title ?? ""
+        let labelText = windowTitle.isEmpty ? appName : "\(appName): \(windowTitle)"
+        
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12, weight: .medium),
+            .foregroundColor: NSColor.white
+        ]
+        let attributedString = NSAttributedString(string: labelText, attributes: attributes)
+        let textSize = attributedString.size()
+        
+        // Position above the window
+        let padding: CGFloat = 8
+        let labelRect = NSRect(
+            x: frame.midX - textSize.width / 2 - padding,
+            y: frame.maxY + 8,
+            width: textSize.width + padding * 2,
+            height: textSize.height + padding
+        )
+        
+        // Draw background
+        NSColor.systemBlue.setFill()
+        let labelPath = NSBezierPath(roundedRect: labelRect, xRadius: 4, yRadius: 4)
+        labelPath.fill()
+        
+        // Draw text
+        attributedString.draw(at: NSPoint(x: labelRect.origin.x + padding, y: labelRect.origin.y + padding / 2))
+    }
+    
+    private func drawModeIndicator() {
+        guard let coordinator = coordinator else { return }
+        
+        let modeText: String
+        let hintText: String
+        
+        switch coordinator.mode {
+        case .area:
+            modeText = "Area Capture"
+            hintText = "Drag to select • Press Space for window mode • Esc to cancel"
+        case .window:
+            modeText = "Window Capture"
+            hintText = "Click a window to capture • Press Space for area mode • Esc to cancel"
+        }
+        
+        // Draw mode pill at top center
+        let modeAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+            .foregroundColor: NSColor.white
+        ]
+        let modeString = NSAttributedString(string: modeText, attributes: modeAttrs)
+        let modeSize = modeString.size()
+        
+        let hintAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12, weight: .regular),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.8)
+        ]
+        let hintString = NSAttributedString(string: hintText, attributes: hintAttrs)
+        let hintSize = hintString.size()
+        
+        let totalWidth = max(modeSize.width, hintSize.width)
+        let padding: CGFloat = 16
+        let spacing: CGFloat = 4
+        let totalHeight = modeSize.height + hintSize.height + spacing
+        
+        let pillRect = NSRect(
+            x: (bounds.width - totalWidth) / 2 - padding,
+            y: bounds.height - 80 - totalHeight / 2,
+            width: totalWidth + padding * 2,
+            height: totalHeight + padding
+        )
+        
+        NSColor.black.withAlphaComponent(0.7).setFill()
+        let pillPath = NSBezierPath(roundedRect: pillRect, xRadius: 8, yRadius: 8)
+        pillPath.fill()
+        
+        // Draw mode text
+        let modePoint = NSPoint(
+            x: (bounds.width - modeSize.width) / 2,
+            y: pillRect.origin.y + padding / 2 + hintSize.height + spacing
+        )
+        modeString.draw(at: modePoint)
+        
+        // Draw hint text
+        let hintPoint = NSPoint(
+            x: (bounds.width - hintSize.width) / 2,
+            y: pillRect.origin.y + padding / 2
+        )
+        hintString.draw(at: hintPoint)
+    }
+    
     override func mouseDown(with event: NSEvent) {
-        // Convert to global screen coordinates
+        guard let coordinator = coordinator else { return }
+        
         let localPoint = convert(event.locationInWindow, from: nil)
         let globalPoint = NSPoint(x: localPoint.x + screen.frame.origin.x, y: localPoint.y + screen.frame.origin.y)
-        coordinator?.startSelection(at: globalPoint, screen: screen)
+        
+        switch coordinator.mode {
+        case .area:
+            coordinator.startSelection(at: globalPoint, screen: screen)
+        case .window:
+            coordinator.handleClick(at: globalPoint)
+        }
     }
     
     override func mouseDragged(with event: NSEvent) {
+        guard let coordinator = coordinator, coordinator.mode == .area else { return }
+        
         let localPoint = convert(event.locationInWindow, from: nil)
         let globalPoint = NSPoint(x: localPoint.x + screen.frame.origin.x, y: localPoint.y + screen.frame.origin.y)
-        coordinator?.updateSelection(to: globalPoint)
+        coordinator.updateSelection(to: globalPoint)
     }
     
     override func mouseUp(with event: NSEvent) {
+        guard let coordinator = coordinator, coordinator.mode == .area else { return }
+        
         let localPoint = convert(event.locationInWindow, from: nil)
         let globalPoint = NSPoint(x: localPoint.x + screen.frame.origin.x, y: localPoint.y + screen.frame.origin.y)
         
         // Determine which screen the selection ends on
         let endScreen = NSScreen.screens.first { $0.frame.contains(globalPoint) } ?? screen
-        coordinator?.endSelection(at: globalPoint, screen: endScreen)
+        coordinator.endSelection(at: globalPoint, screen: endScreen)
+    }
+    
+    override func mouseMoved(with event: NSEvent) {
+        guard let coordinator = coordinator else { return }
+        
+        let localPoint = convert(event.locationInWindow, from: nil)
+        let globalPoint = NSPoint(x: localPoint.x + screen.frame.origin.x, y: localPoint.y + screen.frame.origin.y)
+        coordinator.handleMouseMoved(at: globalPoint)
     }
     
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { // Escape
-            coordinator?.cancel()
+        guard let coordinator = coordinator else { return }
+        
+        switch event.keyCode {
+        case 53: // Escape
+            coordinator.cancel()
+        case 49: // Space - toggle mode
+            coordinator.toggleMode()
+        default:
+            break
         }
     }
     
@@ -265,6 +585,7 @@ class AreaSelectionView: NSView {
     
     func updateDimensionLabel() {
         guard let coordinator = coordinator,
+              coordinator.mode == .area,
               let start = coordinator.selectionStart,
               let end = coordinator.selectionEnd,
               coordinator.activeScreen == screen else {

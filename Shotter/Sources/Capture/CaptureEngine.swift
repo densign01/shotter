@@ -19,7 +19,7 @@ struct CaptureDisplay: Identifiable {
 }
 
 /// Result of area selection, including which display was selected
-struct AreaSelectionResult {
+struct AreaCaptureResult {
     let rect: CGRect
     let display: CaptureDisplay
 }
@@ -133,12 +133,24 @@ class CaptureEngine {
     // MARK: - Area Capture
     
     func captureArea() async -> NSImage? {
-        // Show selection overlay and wait for user to select area
-        guard let result = await showAreaSelector() else {
+        // Show selection overlay and wait for user to select area (or window via Space)
+        let result = await showAreaSelector()
+        
+        switch result {
+        case .area(let areaResult):
+            return await captureAreaOnDisplay(rect: areaResult.rect, display: areaResult.display)
+        case .window(let window):
+            return await captureWindow(window)
+        case .cancelled:
             return nil
         }
-        
-        return await captureAreaOnDisplay(rect: result.rect, display: result.display)
+    }
+    
+    /// Internal result type for area selector
+    private enum AreaSelectorInternalResult {
+        case area(AreaCaptureResult)
+        case window(SCWindow)
+        case cancelled
     }
     
     /// Capture a specific area on a specific display
@@ -244,22 +256,24 @@ class CaptureEngine {
     // MARK: - Selectors
     
     @MainActor
-    private func showAreaSelector() async -> AreaSelectionResult? {
+    private func showAreaSelector() async -> AreaSelectorInternalResult {
         return await withCheckedContinuation { continuation in
-            let selector = AreaSelectorWindow { [weak self] rect, screen in
-                guard let rect = rect, let screen = screen else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                
-                // Find the matching CaptureDisplay
-                Task {
-                    let allDisplays = await self?.getAvailableDisplays() ?? []
-                    if let display = allDisplays.first(where: { $0.screen == screen }) {
-                        continuation.resume(returning: AreaSelectionResult(rect: rect, display: display))
-                    } else {
-                        continuation.resume(returning: nil)
+            let selector = AreaSelectorWindow { [weak self] result in
+                switch result {
+                case .area(let rect, let screen):
+                    // Find the matching CaptureDisplay
+                    Task {
+                        let allDisplays = await self?.getAvailableDisplays() ?? []
+                        if let display = allDisplays.first(where: { $0.screen == screen }) {
+                            continuation.resume(returning: .area(AreaCaptureResult(rect: rect, display: display)))
+                        } else {
+                            continuation.resume(returning: .cancelled)
+                        }
                     }
+                case .window(let window):
+                    continuation.resume(returning: .window(window))
+                case .cancelled:
+                    continuation.resume(returning: .cancelled)
                 }
             }
             selector.show()
