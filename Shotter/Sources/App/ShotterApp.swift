@@ -1,5 +1,8 @@
 import SwiftUI
 import AppKit
+import os.log
+
+private let logger = Logger(subsystem: "com.densign.shotter", category: "App")
 
 @main
 struct ShotterApp: App {
@@ -57,7 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func captureFullscreen() {
         Task {
             guard let image = await captureEngine?.captureFullscreen() else {
-                print("Failed to capture fullscreen")
+                logger.warning("Failed to capture fullscreen")
                 return
             }
             handleCapture(image)
@@ -67,7 +70,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func captureArea() {
         Task {
             guard let image = await captureEngine?.captureArea() else {
-                print("Failed to capture area")
+                // User cancelled or capture failed - not necessarily an error
+                logger.info("Area capture returned nil (user cancelled or failed)")
                 return
             }
             handleCapture(image)
@@ -76,50 +80,105 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func handleCapture(_ image: NSImage) {
         // Save to file
-        let savedURL = saveImage(image)
+        let result = saveImage(image)
         
         // Show overlay
         DispatchQueue.main.async {
-            self.overlayController?.showOverlay(
-                image: image,
-                savedURL: savedURL,
-                onCopy: {
-                    self.copyToClipboard(image)
-                },
-                onSave: {
-                    if let url = savedURL {
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
+            switch result {
+            case .success(let savedURL):
+                self.overlayController?.showOverlay(
+                    image: image,
+                    savedURL: savedURL,
+                    onCopy: {
+                        self.copyToClipboard(image)
+                    },
+                    onSave: {
+                        NSWorkspace.shared.activateFileViewerSelecting([savedURL])
+                    },
+                    onAnnotate: {
+                        // v2: Open annotation editor
+                        self.showAnnotateComingSoon()
                     }
-                },
-                onAnnotate: {
-                    // v2: Open annotation editor
-                    self.showAnnotateComingSoon()
-                }
-            )
+                )
+            case .failure(let error):
+                self.showSaveErrorAlert(error: error)
+                // Still show overlay but without save functionality
+                self.overlayController?.showOverlay(
+                    image: image,
+                    savedURL: nil,
+                    onCopy: {
+                        self.copyToClipboard(image)
+                    },
+                    onSave: {
+                        // Can't show in Finder since save failed
+                    },
+                    onAnnotate: {
+                        self.showAnnotateComingSoon()
+                    }
+                )
+            }
         }
     }
     
-    private func saveImage(_ image: NSImage) -> URL? {
+    private enum SaveError: LocalizedError {
+        case directoryCreationFailed(Error)
+        case imageConversionFailed
+        case writeFailed(Error)
+        
+        var errorDescription: String? {
+            switch self {
+            case .directoryCreationFailed(let error):
+                return "Could not create save folder: \(error.localizedDescription)"
+            case .imageConversionFailed:
+                return "Could not convert image to PNG format"
+            case .writeFailed(let error):
+                return "Could not save file: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    private func saveImage(_ image: NSImage) -> Result<URL, SaveError> {
         let saveFolder = PreferencesManager.shared.saveLocation
         let filename = FileNaming.generateFilename()
         let fileURL = saveFolder.appendingPathComponent(filename)
         
         // Ensure directory exists
-        try? FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: saveFolder, withIntermediateDirectories: true)
+        } catch {
+            logger.error("Failed to create save directory: \(error.localizedDescription)")
+            return .failure(.directoryCreationFailed(error))
+        }
         
         // Save as PNG
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            return nil
+            logger.error("Failed to convert image to PNG")
+            return .failure(.imageConversionFailed)
         }
         
         do {
             try pngData.write(to: fileURL)
-            return fileURL
+            logger.info("Screenshot saved to: \(fileURL.path)")
+            return .success(fileURL)
         } catch {
-            print("Failed to save image: \(error)")
-            return nil
+            logger.error("Failed to write image file: \(error.localizedDescription)")
+            return .failure(.writeFailed(error))
+        }
+    }
+    
+    private func showSaveErrorAlert(error: SaveError) {
+        let alert = NSAlert()
+        alert.messageText = "Screenshot Not Saved"
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Open Preferences")
+        
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            openPreferences()
         }
     }
     
@@ -195,9 +254,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
             if needsScreenRecording {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                Permissions.openSystemPreferences(privacy: "Privacy_ScreenCapture")
             } else if needsAccessibility {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                Permissions.openSystemPreferences(privacy: "Privacy_Accessibility")
             }
         }
     }

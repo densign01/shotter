@@ -39,6 +39,12 @@ class OverlayController {
     private func startDismissTimer() {
         dismissTimer?.invalidate()
         let delay = PreferencesManager.shared.overlayAutoDismissDelay
+        
+        // Don't create timer if delay is infinite (never auto-dismiss)
+        guard delay.isFinite else {
+            return
+        }
+        
         dismissTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             self?.dismissOverlay()
         }

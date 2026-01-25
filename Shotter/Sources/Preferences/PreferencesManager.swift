@@ -1,6 +1,9 @@
 import Foundation
 import SwiftUI
 import ServiceManagement
+import os.log
+
+private let logger = Logger(subsystem: "com.densign.shotter", category: "Preferences")
 
 class PreferencesManager: ObservableObject {
     static let shared = PreferencesManager()
@@ -37,8 +40,9 @@ class PreferencesManager: ObservableObject {
         if let path = defaults.string(forKey: Keys.saveLocation) {
             saveLocation = URL(fileURLWithPath: path)
         } else {
-            // Default: ~/Pictures/Shotter/
-            let picturesURL = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first!
+            // Default: ~/Pictures/Shotter/ with fallback to temp directory
+            let picturesURL = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
+                ?? FileManager.default.temporaryDirectory
             saveLocation = picturesURL.appendingPathComponent("Shotter")
         }
         
@@ -58,7 +62,7 @@ class PreferencesManager: ObservableObject {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            print("Failed to update launch at login: \(error)")
+            logger.error("Failed to update launch at login: \(error.localizedDescription)")
         }
     }
 }

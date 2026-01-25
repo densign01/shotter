@@ -1,5 +1,8 @@
 import AppKit
 import Carbon
+import os.log
+
+private let logger = Logger(subsystem: "com.densign.shotter", category: "Hotkeys")
 
 class HotkeyManager {
     private var eventTap: CFMachPort?
@@ -22,7 +25,7 @@ class HotkeyManager {
     private func setupEventTap() {
         // Check accessibility permissions
         guard Permissions.checkAccessibility() else {
-            print("Accessibility permission not granted - hotkeys disabled")
+            logger.warning("Accessibility permission not granted - hotkeys disabled")
             return
         }
         
@@ -46,7 +49,7 @@ class HotkeyManager {
             callback: callback,
             userInfo: refcon
         ) else {
-            print("Failed to create event tap")
+            logger.error("Failed to create event tap - hotkeys will not work")
             return
         }
         
@@ -56,6 +59,7 @@ class HotkeyManager {
         if let source = runLoopSource {
             CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
             CGEvent.tapEnable(tap: tap, enable: true)
+            logger.info("Hotkey event tap registered successfully")
         }
     }
     

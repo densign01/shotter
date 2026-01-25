@@ -1,5 +1,8 @@
 import AppKit
 import ScreenCaptureKit
+import os.log
+
+private let logger = Logger(subsystem: "com.densign.shotter", category: "Capture")
 
 class CaptureEngine {
     private var availableContent: SCShareableContent?
@@ -14,8 +17,13 @@ class CaptureEngine {
         do {
             availableContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         } catch {
-            print("Failed to get available content: \(error)")
+            logger.error("Failed to get available content: \(error.localizedDescription)")
         }
+    }
+    
+    /// Get the actual display scale factor
+    private func getDisplayScaleFactor() -> CGFloat {
+        return NSScreen.main?.backingScaleFactor ?? 2.0
     }
     
     // MARK: - Fullscreen Capture
@@ -24,15 +32,16 @@ class CaptureEngine {
         await refreshAvailableContent()
         
         guard let display = availableContent?.displays.first else {
-            print("No display available")
+            logger.warning("No display available for fullscreen capture")
             return nil
         }
         
+        let scaleFactor = getDisplayScaleFactor()
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let config = SCStreamConfiguration()
         
-        config.width = display.width * 2  // Retina
-        config.height = display.height * 2
+        config.width = Int(CGFloat(display.width) * scaleFactor)
+        config.height = Int(CGFloat(display.height) * scaleFactor)
         config.scalesToFit = false
         config.showsCursor = false
         
@@ -43,7 +52,7 @@ class CaptureEngine {
             )
             return NSImage(cgImage: image, size: NSSize(width: display.width, height: display.height))
         } catch {
-            print("Failed to capture fullscreen: \(error)")
+            logger.error("Failed to capture fullscreen: \(error.localizedDescription)")
             return nil
         }
     }
@@ -59,15 +68,16 @@ class CaptureEngine {
         await refreshAvailableContent()
         
         guard let display = availableContent?.displays.first else {
-            print("No display available")
+            logger.warning("No display available for area capture")
             return nil
         }
         
+        let scaleFactor = getDisplayScaleFactor()
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let config = SCStreamConfiguration()
         
-        config.width = display.width * 2  // Retina
-        config.height = display.height * 2
+        config.width = Int(CGFloat(display.width) * scaleFactor)
+        config.height = Int(CGFloat(display.height) * scaleFactor)
         config.scalesToFit = false
         config.showsCursor = false
         
@@ -78,17 +88,17 @@ class CaptureEngine {
                 configuration: config
             )
             
-            // Scale selectedRect for Retina
-            let scale = CGFloat(display.width * 2) / CGFloat(display.width)
+            // Scale selectedRect for display scale factor
             let scaledRect = CGRect(
-                x: selectedRect.origin.x * scale,
-                y: selectedRect.origin.y * scale,
-                width: selectedRect.width * scale,
-                height: selectedRect.height * scale
+                x: selectedRect.origin.x * scaleFactor,
+                y: selectedRect.origin.y * scaleFactor,
+                width: selectedRect.width * scaleFactor,
+                height: selectedRect.height * scaleFactor
             )
             
             // Crop to selected area
             guard let croppedCGImage = fullImage.cropping(to: scaledRect) else {
+                logger.error("Failed to crop image to selected area")
                 return nil
             }
             
@@ -97,7 +107,7 @@ class CaptureEngine {
                 size: NSSize(width: selectedRect.width, height: selectedRect.height)
             )
         } catch {
-            print("Failed to capture area: \(error)")
+            logger.error("Failed to capture area: \(error.localizedDescription)")
             return nil
         }
     }

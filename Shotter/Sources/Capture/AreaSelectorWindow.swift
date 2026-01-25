@@ -1,7 +1,7 @@
 import AppKit
 
 class AreaSelectorWindow: NSWindow {
-    private var selectionView: AreaSelectionView!
+    private var selectionView: AreaSelectionView?
     private var completion: ((CGRect?) -> Void)?
     
     init(completion: @escaping (CGRect?) -> Void) {
@@ -9,13 +9,13 @@ class AreaSelectorWindow: NSWindow {
         
         // Get the main screen frame
         guard let screen = NSScreen.main else {
-            completion(nil)
             super.init(
                 contentRect: .zero,
                 styleMask: .borderless,
                 backing: .buffered,
                 defer: false
             )
+            completion(nil)
             return
         }
         
@@ -35,20 +35,22 @@ class AreaSelectorWindow: NSWindow {
         self.hasShadow = false
         
         // Create selection view
-        selectionView = AreaSelectionView(frame: screen.frame)
-        selectionView.onSelectionComplete = { [weak self] rect in
+        let view = AreaSelectionView(frame: screen.frame)
+        view.onSelectionComplete = { [weak self] rect in
             self?.handleSelectionComplete(rect)
         }
-        selectionView.onCancel = { [weak self] in
+        view.onCancel = { [weak self] in
             self?.handleCancel()
         }
-        
-        self.contentView = selectionView
+        selectionView = view
+        self.contentView = view
     }
     
     func show() {
         self.makeKeyAndOrderFront(nil)
-        self.makeFirstResponder(selectionView)
+        if let view = selectionView {
+            self.makeFirstResponder(view)
+        }
         NSCursor.crosshair.push()
     }
     
