@@ -30,6 +30,8 @@ struct PreferencesView: View {
                     .frame(width: 120)
                 }
                 
+                Toggle("Play capture sound", isOn: $prefs.playCaptureSound)
+                
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
                 Text("General")
@@ -53,6 +55,19 @@ struct PreferencesView: View {
                     Text("Area")
                     Spacer()
                     Text("⌘⇧4")
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.gray.opacity(0.2))
+                        )
+                }
+                
+                HStack {
+                    Text("Window")
+                    Spacer()
+                    Text("⌘⇧5")
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)

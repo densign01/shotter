@@ -42,13 +42,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController = MenuBarController(
             onCaptureFullscreen: { [weak self] in self?.captureFullscreen() },
             onCaptureArea: { [weak self] in self?.captureArea() },
+            onCaptureWindow: { [weak self] in self?.captureWindow() },
+            onCaptureDisplay: { [weak self] display in self?.captureDisplay(display) },
             onOpenSaveFolder: { self.openSaveFolder() },
-            onOpenPreferences: { self.openPreferences() }
+            onOpenPreferences: { self.openPreferences() },
+            getDisplays: { [weak self] in
+                await self?.captureEngine?.getAvailableDisplays() ?? []
+            }
         )
         
         hotkeyManager = HotkeyManager(
             onFullscreen: { [weak self] in self?.captureFullscreen() },
-            onArea: { [weak self] in self?.captureArea() }
+            onArea: { [weak self] in self?.captureArea() },
+            onWindow: { [weak self] in self?.captureWindow() }
         )
         
         // Check permissions on launch
@@ -78,7 +84,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    private func captureWindow() {
+        Task {
+            guard let image = await captureEngine?.captureWindowInteractive() else {
+                // User cancelled or capture failed
+                logger.info("Window capture returned nil (user cancelled or failed)")
+                return
+            }
+            handleCapture(image)
+        }
+    }
+    
+    private func captureDisplay(_ display: CaptureDisplay) {
+        Task {
+            guard let image = await captureEngine?.captureDisplay(display) else {
+                logger.warning("Failed to capture display: \(display.name)")
+                return
+            }
+            handleCapture(image)
+        }
+    }
+    
     private func handleCapture(_ image: NSImage) {
+        // Play capture sound if enabled
+        if PreferencesManager.shared.playCaptureSound {
+            SoundManager.shared.playCaptureSound()
+        }
         // Save to file
         let result = saveImage(image)
         

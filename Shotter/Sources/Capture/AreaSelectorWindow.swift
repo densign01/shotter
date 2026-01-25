@@ -1,23 +1,138 @@
 import AppKit
 
-class AreaSelectorWindow: NSWindow {
-    private var selectionView: AreaSelectionView?
-    private var completion: ((CGRect?) -> Void)?
+/// Manages multiple overlay windows for area selection across all displays
+class AreaSelectorWindow {
+    private var overlayWindows: [AreaOverlayWindow] = []
+    private var completion: ((CGRect?, NSScreen?) -> Void)?
+    private var coordinator: AreaSelectionCoordinator?
     
-    init(completion: @escaping (CGRect?) -> Void) {
+    init(completion: @escaping (CGRect?, NSScreen?) -> Void) {
         self.completion = completion
         
-        // Get the main screen frame
-        guard let screen = NSScreen.main else {
-            super.init(
-                contentRect: .zero,
-                styleMask: .borderless,
-                backing: .buffered,
-                defer: false
-            )
-            completion(nil)
-            return
+        // Create coordinator to sync selection state across screens
+        coordinator = AreaSelectionCoordinator()
+        coordinator?.onSelectionComplete = { [weak self] rect, screen in
+            self?.handleSelectionComplete(rect, screen: screen)
         }
+        coordinator?.onCancel = { [weak self] in
+            self?.handleCancel()
+        }
+        
+        // Create an overlay window for each screen
+        for screen in NSScreen.screens {
+            let window = AreaOverlayWindow(screen: screen, coordinator: coordinator!)
+            overlayWindows.append(window)
+        }
+    }
+    
+    func show() {
+        NSCursor.crosshair.push()
+        for window in overlayWindows {
+            window.show()
+        }
+    }
+    
+    private func handleSelectionComplete(_ rect: CGRect, screen: NSScreen) {
+        NSCursor.pop()
+        for window in overlayWindows {
+            window.orderOut(nil)
+        }
+        completion?(rect, screen)
+        completion = nil
+    }
+    
+    private func handleCancel() {
+        NSCursor.pop()
+        for window in overlayWindows {
+            window.orderOut(nil)
+        }
+        completion?(nil, nil)
+        completion = nil
+    }
+}
+
+/// Coordinates selection state across multiple screens
+class AreaSelectionCoordinator {
+    var onSelectionComplete: ((CGRect, NSScreen) -> Void)?
+    var onCancel: (() -> Void)?
+    
+    var isSelecting = false
+    var selectionStart: NSPoint?
+    var selectionEnd: NSPoint?
+    var activeScreen: NSScreen?
+    
+    // All registered views for cross-screen updates
+    var views: [AreaSelectionView] = []
+    
+    func startSelection(at point: NSPoint, screen: NSScreen) {
+        isSelecting = true
+        selectionStart = point
+        selectionEnd = point
+        activeScreen = screen
+        updateAllViews()
+    }
+    
+    func updateSelection(to point: NSPoint) {
+        guard isSelecting else { return }
+        selectionEnd = point
+        updateAllViews()
+    }
+    
+    func endSelection(at point: NSPoint, screen: NSScreen) {
+        guard isSelecting, let start = selectionStart else { return }
+        isSelecting = false
+        selectionEnd = point
+        
+        let rect = rectFromPoints(start, point)
+        
+        // Minimum size check
+        if rect.width > 10 && rect.height > 10 {
+            // Convert to screen coordinates (flip Y for the active screen)
+            let flippedRect = CGRect(
+                x: rect.origin.x - screen.frame.origin.x,
+                y: screen.frame.height - (rect.origin.y - screen.frame.origin.y) - rect.height,
+                width: rect.width,
+                height: rect.height
+            )
+            onSelectionComplete?(flippedRect, screen)
+        } else {
+            onCancel?()
+        }
+    }
+    
+    func cancel() {
+        isSelecting = false
+        selectionStart = nil
+        selectionEnd = nil
+        activeScreen = nil
+        onCancel?()
+    }
+    
+    private func rectFromPoints(_ p1: NSPoint, _ p2: NSPoint) -> NSRect {
+        let x = min(p1.x, p2.x)
+        let y = min(p1.y, p2.y)
+        let width = abs(p2.x - p1.x)
+        let height = abs(p2.y - p1.y)
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
+    
+    private func updateAllViews() {
+        for view in views {
+            view.needsDisplay = true
+            view.updateDimensionLabel()
+        }
+    }
+}
+
+/// Individual overlay window for one screen
+class AreaOverlayWindow: NSWindow {
+    private var selectionView: AreaSelectionView?
+    private weak var coordinator: AreaSelectionCoordinator?
+    let associatedScreen: NSScreen
+    
+    init(screen: NSScreen, coordinator: AreaSelectionCoordinator) {
+        self.coordinator = coordinator
+        self.associatedScreen = screen
         
         super.init(
             contentRect: screen.frame,
@@ -35,13 +150,8 @@ class AreaSelectorWindow: NSWindow {
         self.hasShadow = false
         
         // Create selection view
-        let view = AreaSelectionView(frame: screen.frame)
-        view.onSelectionComplete = { [weak self] rect in
-            self?.handleSelectionComplete(rect)
-        }
-        view.onCancel = { [weak self] in
-            self?.handleCancel()
-        }
+        let view = AreaSelectionView(frame: screen.frame, screen: screen, coordinator: coordinator)
+        coordinator.views.append(view)
         selectionView = view
         self.contentView = view
     }
@@ -51,62 +161,65 @@ class AreaSelectorWindow: NSWindow {
         if let view = selectionView {
             self.makeFirstResponder(view)
         }
-        NSCursor.crosshair.push()
-    }
-    
-    private func handleSelectionComplete(_ rect: CGRect) {
-        NSCursor.pop()
-        self.orderOut(nil)
-        completion?(rect)
-        completion = nil
-    }
-    
-    private func handleCancel() {
-        NSCursor.pop()
-        self.orderOut(nil)
-        completion?(nil)
-        completion = nil
     }
 }
 
 class AreaSelectionView: NSView {
-    var onSelectionComplete: ((CGRect) -> Void)?
-    var onCancel: (() -> Void)?
-    
-    private var selectionStart: NSPoint?
-    private var selectionEnd: NSPoint?
-    private var isSelecting = false
+    private weak var coordinator: AreaSelectionCoordinator?
+    private let screen: NSScreen
     
     private var dimensionLabel: NSTextField?
     
     override var acceptsFirstResponder: Bool { true }
     
+    init(frame: NSRect, screen: NSScreen, coordinator: AreaSelectionCoordinator) {
+        self.screen = screen
+        self.coordinator = coordinator
+        super.init(frame: frame)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
     override func draw(_ dirtyRect: NSRect) {
         // Draw selection rectangle if selecting
-        if let start = selectionStart, let end = selectionEnd {
-            let selectionRect = rectFromPoints(start, end)
+        if let coordinator = coordinator,
+           let start = coordinator.selectionStart,
+           let end = coordinator.selectionEnd {
+            
+            // Convert global screen coordinates to local view coordinates
+            let localStart = NSPoint(x: start.x - screen.frame.origin.x, y: start.y - screen.frame.origin.y)
+            let localEnd = NSPoint(x: end.x - screen.frame.origin.x, y: end.y - screen.frame.origin.y)
+            
+            let selectionRect = rectFromPoints(localStart, localEnd)
 
             // Create a path that covers the entire view but excludes the selection
             let overlayPath = NSBezierPath(rect: bounds)
-            overlayPath.append(NSBezierPath(rect: selectionRect).reversed)
+            if selectionRect.intersects(bounds) {
+                let clippedRect = selectionRect.intersection(bounds)
+                overlayPath.append(NSBezierPath(rect: clippedRect).reversed)
+            }
             overlayPath.windingRule = .evenOdd
 
             // Fill the overlay (everything except selection)
             NSColor.black.withAlphaComponent(0.3).setFill()
             overlayPath.fill()
 
-            // Draw border around selection
-            NSColor.white.setStroke()
-            let borderPath = NSBezierPath(rect: selectionRect)
-            borderPath.lineWidth = 2
-            borderPath.stroke()
+            // Draw border around selection (only on the screen where selection is visible)
+            if selectionRect.intersects(bounds) && bounds.contains(selectionRect) {
+                NSColor.white.setStroke()
+                let borderPath = NSBezierPath(rect: selectionRect)
+                borderPath.lineWidth = 2
+                borderPath.stroke()
 
-            // Draw dashed inner border
-            NSColor.white.withAlphaComponent(0.5).setStroke()
-            let dashPath = NSBezierPath(rect: selectionRect.insetBy(dx: 1, dy: 1))
-            dashPath.lineWidth = 1
-            dashPath.setLineDash([4, 4], count: 2, phase: 0)
-            dashPath.stroke()
+                // Draw dashed inner border
+                NSColor.white.withAlphaComponent(0.5).setStroke()
+                let dashPath = NSBezierPath(rect: selectionRect.insetBy(dx: 1, dy: 1))
+                dashPath.lineWidth = 1
+                dashPath.setLineDash([4, 4], count: 2, phase: 0)
+                dashPath.stroke()
+            }
         } else {
             // No selection yet - fill entire view with dim overlay
             NSColor.black.withAlphaComponent(0.3).setFill()
@@ -115,53 +228,30 @@ class AreaSelectionView: NSView {
     }
     
     override func mouseDown(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        selectionStart = point
-        selectionEnd = point
-        isSelecting = true
-        needsDisplay = true
+        // Convert to global screen coordinates
+        let localPoint = convert(event.locationInWindow, from: nil)
+        let globalPoint = NSPoint(x: localPoint.x + screen.frame.origin.x, y: localPoint.y + screen.frame.origin.y)
+        coordinator?.startSelection(at: globalPoint, screen: screen)
     }
     
     override func mouseDragged(with event: NSEvent) {
-        guard isSelecting else { return }
-        let point = convert(event.locationInWindow, from: nil)
-        selectionEnd = point
-        needsDisplay = true
-        updateDimensionLabel()
+        let localPoint = convert(event.locationInWindow, from: nil)
+        let globalPoint = NSPoint(x: localPoint.x + screen.frame.origin.x, y: localPoint.y + screen.frame.origin.y)
+        coordinator?.updateSelection(to: globalPoint)
     }
     
     override func mouseUp(with event: NSEvent) {
-        guard isSelecting, let start = selectionStart, let end = selectionEnd else {
-            return
-        }
+        let localPoint = convert(event.locationInWindow, from: nil)
+        let globalPoint = NSPoint(x: localPoint.x + screen.frame.origin.x, y: localPoint.y + screen.frame.origin.y)
         
-        isSelecting = false
-        let rect = rectFromPoints(start, end)
-        
-        // Minimum size check
-        if rect.width > 10 && rect.height > 10 {
-            // Convert to screen coordinates (flip Y)
-            guard let screen = NSScreen.main else {
-                onCancel?()
-                return
-            }
-            
-            let flippedRect = CGRect(
-                x: rect.origin.x,
-                y: screen.frame.height - rect.origin.y - rect.height,
-                width: rect.width,
-                height: rect.height
-            )
-            
-            onSelectionComplete?(flippedRect)
-        } else {
-            onCancel?()
-        }
+        // Determine which screen the selection ends on
+        let endScreen = NSScreen.screens.first { $0.frame.contains(globalPoint) } ?? screen
+        coordinator?.endSelection(at: globalPoint, screen: endScreen)
     }
     
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { // Escape
-            onCancel?()
+            coordinator?.cancel()
         }
     }
     
@@ -173,10 +263,20 @@ class AreaSelectionView: NSView {
         return NSRect(x: x, y: y, width: width, height: height)
     }
     
-    private func updateDimensionLabel() {
-        guard let start = selectionStart, let end = selectionEnd else { return }
+    func updateDimensionLabel() {
+        guard let coordinator = coordinator,
+              let start = coordinator.selectionStart,
+              let end = coordinator.selectionEnd,
+              coordinator.activeScreen == screen else {
+            dimensionLabel?.isHidden = true
+            return
+        }
         
-        let rect = rectFromPoints(start, end)
+        // Convert to local coordinates
+        let localStart = NSPoint(x: start.x - screen.frame.origin.x, y: start.y - screen.frame.origin.y)
+        let localEnd = NSPoint(x: end.x - screen.frame.origin.x, y: end.y - screen.frame.origin.y)
+        
+        let rect = rectFromPoints(localStart, localEnd)
         let text = "\(Int(rect.width)) × \(Int(rect.height))"
         
         if dimensionLabel == nil {
@@ -193,6 +293,7 @@ class AreaSelectionView: NSView {
             dimensionLabel = label
         }
         
+        dimensionLabel?.isHidden = false
         dimensionLabel?.stringValue = text
         dimensionLabel?.sizeToFit()
         

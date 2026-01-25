@@ -14,6 +14,7 @@ class PreferencesManager: ObservableObject {
         static let saveLocation = "saveLocation"
         static let overlayAutoDismissDelay = "overlayAutoDismissDelay"
         static let launchAtLogin = "launchAtLogin"
+        static let playCaptureSound = "playCaptureSound"
     }
     
     @Published var saveLocation: URL {
@@ -32,6 +33,12 @@ class PreferencesManager: ObservableObject {
         didSet {
             defaults.set(launchAtLogin, forKey: Keys.launchAtLogin)
             updateLaunchAtLogin()
+        }
+    }
+    
+    @Published var playCaptureSound: Bool {
+        didSet {
+            defaults.set(playCaptureSound, forKey: Keys.playCaptureSound)
         }
     }
     
@@ -58,6 +65,13 @@ class PreferencesManager: ObservableObject {
         
         // Load launch at login
         launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
+        
+        // Load capture sound preference (default to true)
+        if defaults.object(forKey: Keys.playCaptureSound) == nil {
+            playCaptureSound = true
+        } else {
+            playCaptureSound = defaults.bool(forKey: Keys.playCaptureSound)
+        }
     }
     
     private func updateLaunchAtLogin() {
