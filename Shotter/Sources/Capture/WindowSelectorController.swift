@@ -300,9 +300,9 @@ class WindowSelectorView: NSView {
         // Convert Cocoa coordinates to SCK coordinates using full virtual display bounds
         let sckPoint = NSScreen.convertToSCK(point)
 
-        // Find windows that contain this point (front to back)
-        // Windows are already sorted by layer in SCShareableContent
-        for window in windows.reversed() {
+        // Find windows that contain this point
+        // SCShareableContent.windows is already sorted front-to-back, so first match is frontmost
+        for window in windows {
             if window.frame.contains(sckPoint) {
                 return window
             }

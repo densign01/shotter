@@ -142,24 +142,58 @@ class AreaSelectionCoordinator {
     // Window selection state
     var availableWindows: [SCWindow] = []
     var highlightedWindow: SCWindow?
+    private var windowLoadGeneration: Int = 0
     
     // All registered views for cross-screen updates
     var views: [AreaSelectionView] = []
     
     func loadWindows() async {
+        let generation = await MainActor.run {
+            windowLoadGeneration += 1
+            return windowLoadGeneration
+        }
         do {
-            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-            await MainActor.run {
-                self.availableWindows = content.windows.filter { window in
-                    // Filter out system windows and tiny windows
+            // excludingDesktopWindows: true filters out Finder desktop windows
+            let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+            let ownBundleID = Bundle.main.bundleIdentifier
+
+            let filteredWindows = content.windows.filter { window in
+                    // Must have owningApplication (filters out system artifacts)
+                    guard let app = window.owningApplication else {
+                        return false
+                    }
+
+                    // Exclude our own app's windows (overlays, preferences, etc.)
+                    if let ownID = ownBundleID, app.bundleIdentifier == ownID {
+                        return false
+                    }
+
+                    // Exclude Dock and Notification Center (system UI with misleading frames)
+                    let excludedBundles = ["com.apple.dock", "com.apple.notificationcenterui"]
+                    if excludedBundles.contains(app.bundleIdentifier) {
+                        return false
+                    }
+
+                    // Must have a reasonable size
                     guard window.frame.width > 50 && window.frame.height > 50 else {
                         return false
                     }
+
+                    // Must have a title or be from a non-system app
                     let hasTitle = window.title?.isEmpty == false
-                    let isSystemUI = (window.owningApplication?.bundleIdentifier.hasPrefix("com.apple.") ?? false)
-                        && window.title == nil
+                    let isSystemUI = app.bundleIdentifier.hasPrefix("com.apple.") && window.title == nil
+
                     return hasTitle || !isSystemUI
                 }
+            let orderedWindows = WindowOrdering.sortByZOrder(filteredWindows)
+
+            await MainActor.run {
+                guard self.windowLoadGeneration == generation else {
+                    return
+                }
+                self.availableWindows = orderedWindows
+                self.highlightedWindow = nil
+                self.updateAllViews()
             }
         } catch {
             // Windows will be empty, but area selection will still work
@@ -177,7 +211,15 @@ class AreaSelectionCoordinator {
     }
     
     func toggleMode() {
-        mode = (mode == .area) ? .window : .area
+        let newMode: SelectionMode = (mode == .area) ? .window : .area
+        mode = newMode
+
+        // Refresh window list when entering window mode to get current z-order
+        if newMode == .window {
+            Task {
+                await loadWindows()
+            }
+        }
     }
     
     func startSelection(at point: NSPoint, screen: NSScreen) {
@@ -233,8 +275,9 @@ class AreaSelectionCoordinator {
         // Convert Cocoa coordinates to SCK coordinates using full virtual display bounds
         let sckPoint = NSScreen.convertToSCK(point)
 
-        // Find windows that contain this point (front to back)
-        for window in availableWindows.reversed() {
+        // Find windows that contain this point
+        // Windows are sorted front-to-back by WindowOrdering, so first match is frontmost
+        for window in availableWindows {
             if window.frame.contains(sckPoint) {
                 return window
             }

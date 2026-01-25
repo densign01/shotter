@@ -45,7 +45,8 @@ class CaptureEngine {
     
     private func refreshAvailableContent() async {
         do {
-            availableContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            // excludingDesktopWindows: true filters out Finder desktop windows
+            availableContent = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
         } catch {
             logger.error("Failed to get available content: \(error.localizedDescription)")
         }
@@ -202,25 +203,43 @@ class CaptureEngine {
     /// Get all capturable windows
     func getAvailableWindows() async -> [SCWindow] {
         await refreshAvailableContent()
-        
+
         guard let windows = availableContent?.windows else {
             return []
         }
-        
-        // Filter out system windows and tiny windows
-        return windows.filter { window in
+
+        let ownBundleID = Bundle.main.bundleIdentifier
+
+        // Filter out system windows, own app windows, and tiny windows
+        let filteredWindows = windows.filter { window in
+            // Must have owningApplication (filters out system artifacts)
+            guard let app = window.owningApplication else {
+                return false
+            }
+
+            // Exclude our own app's windows (overlays, preferences, etc.)
+            if let ownID = ownBundleID, app.bundleIdentifier == ownID {
+                return false
+            }
+
+            // Exclude Dock and Notification Center (system UI with misleading frames)
+            let excludedBundles = ["com.apple.dock", "com.apple.notificationcenterui"]
+            if excludedBundles.contains(app.bundleIdentifier) {
+                return false
+            }
+
             // Must have a reasonable size
             guard window.frame.width > 50 && window.frame.height > 50 else {
                 return false
             }
-            
+
             // Must have a title or be from a non-system app
             let hasTitle = window.title?.isEmpty == false
-            let isSystemUI = (window.owningApplication?.bundleIdentifier.hasPrefix("com.apple.") ?? false)
-                && window.title == nil
-            
+            let isSystemUI = app.bundleIdentifier.hasPrefix("com.apple.") && window.title == nil
+
             return hasTitle || !isSystemUI
         }
+        return WindowOrdering.sortByZOrder(filteredWindows)
     }
     
     /// Capture a specific window
