@@ -38,7 +38,9 @@ struct PreferencesView: View {
                 }
                 
                 Toggle("Play capture sound", isOn: $prefs.playCaptureSound)
-                
+
+                Toggle("Auto-copy to clipboard", isOn: $prefs.autoCopyToClipboard)
+
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
                 Text("General")

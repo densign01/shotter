@@ -110,6 +110,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if PreferencesManager.shared.playCaptureSound {
             SoundManager.shared.playCaptureSound()
         }
+
+        // Auto-copy to clipboard if enabled (must be on main thread for NSPasteboard)
+        if PreferencesManager.shared.autoCopyToClipboard {
+            DispatchQueue.main.async {
+                self.copyToClipboard(image)
+            }
+        }
+
         // Save to file
         let result = saveImage(image)
         

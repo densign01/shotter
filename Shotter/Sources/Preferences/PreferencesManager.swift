@@ -76,6 +76,7 @@ class PreferencesManager: ObservableObject {
         static let overlayAutoDismissDelay = "overlayAutoDismissDelay"
         static let launchAtLogin = "launchAtLogin"
         static let playCaptureSound = "playCaptureSound"
+        static let autoCopyToClipboard = "autoCopyToClipboard"
         static let shortcutFullscreen = "shortcutFullscreen"
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
@@ -105,7 +106,13 @@ class PreferencesManager: ObservableObject {
             defaults.set(playCaptureSound, forKey: Keys.playCaptureSound)
         }
     }
-    
+
+    @Published var autoCopyToClipboard: Bool {
+        didSet {
+            defaults.set(autoCopyToClipboard, forKey: Keys.autoCopyToClipboard)
+        }
+    }
+
     @Published var shortcutFullscreen: ShortcutConfig {
         didSet {
             saveShortcut(shortcutFullscreen, forKey: Keys.shortcutFullscreen)
@@ -171,7 +178,10 @@ class PreferencesManager: ObservableObject {
         } else {
             playCaptureSound = defaults.bool(forKey: Keys.playCaptureSound)
         }
-        
+
+        // Load auto-copy preference (default to false)
+        autoCopyToClipboard = defaults.bool(forKey: Keys.autoCopyToClipboard)
+
         // Load shortcuts
         shortcutFullscreen = Self.loadShortcut(from: defaults, forKey: Keys.shortcutFullscreen, default: .defaultFullscreen)
         shortcutArea = Self.loadShortcut(from: defaults, forKey: Keys.shortcutArea, default: .defaultArea)
