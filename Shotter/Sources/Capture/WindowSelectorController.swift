@@ -233,25 +233,15 @@ class WindowSelectorView: NSView {
     }
     
     private func convertWindowFrameToView(_ windowFrame: CGRect) -> NSRect {
-        // ScreenCaptureKit uses top-left origin coordinates
-        // NSView uses bottom-left origin coordinates
-        
-        // Get the total height of the display space (from main screen)
-        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
-        let mainScreenOrigin = NSScreen.screens.first?.frame.origin ?? .zero
-        
         // Convert from SCK coordinates (top-left origin) to Cocoa coordinates (bottom-left origin)
-        let flippedY = mainScreenHeight - windowFrame.origin.y - windowFrame.height
-        
-        // Convert to this view's coordinate space
-        let localX = windowFrame.origin.x - screen.frame.origin.x
-        let localY = flippedY - screen.frame.origin.y + mainScreenOrigin.y
-        
+        let cocoaFrame = NSScreen.convertFrameFromSCK(windowFrame)
+
+        // Convert to this view's local coordinate space
         return NSRect(
-            x: localX,
-            y: localY,
-            width: windowFrame.width,
-            height: windowFrame.height
+            x: cocoaFrame.origin.x - screen.frame.origin.x,
+            y: cocoaFrame.origin.y - screen.frame.origin.y,
+            width: cocoaFrame.width,
+            height: cocoaFrame.height
         )
     }
     
@@ -307,15 +297,13 @@ class WindowSelectorView: NSView {
     }
     
     private func findWindowAt(_ point: NSPoint) -> SCWindow? {
-        // Convert Cocoa coordinates to SCK coordinates (flip Y)
-        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
-        let sckPoint = NSPoint(x: point.x, y: mainScreenHeight - point.y)
-        
+        // Convert Cocoa coordinates to SCK coordinates using full virtual display bounds
+        let sckPoint = NSScreen.convertToSCK(point)
+
         // Find windows that contain this point (front to back)
         // Windows are already sorted by layer in SCShareableContent
         for window in windows.reversed() {
-            let frame = window.frame
-            if frame.contains(sckPoint) {
+            if window.frame.contains(sckPoint) {
                 return window
             }
         }

@@ -221,8 +221,21 @@ class CaptureEngine {
     
     /// Capture a specific window
     func captureWindow(_ window: SCWindow) async -> NSImage? {
-        let scaleFactor = NSScreen.main?.backingScaleFactor ?? 2.0
-        
+        // Find which screen contains the window center
+        let windowCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
+
+        // ScreenCaptureKit uses top-left origin, Cocoa uses bottom-left origin
+        // Convert SCK coordinates to Cocoa coordinates
+        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
+        let cocoaCenter = NSPoint(x: windowCenter.x, y: mainScreenHeight - windowCenter.y)
+
+        // Find the screen containing this point
+        let containingScreen = NSScreen.screens.first { screen in
+            screen.frame.contains(cocoaCenter)
+        }
+
+        let scaleFactor = containingScreen?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
         

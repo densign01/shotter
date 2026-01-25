@@ -32,9 +32,12 @@ class AnnotationEditorState: ObservableObject {
     private let maxUndoLevels = 50
     
     // MARK: - Base Image
-    
+
     let baseImage: NSImage
     let imageSize: CGSize
+
+    // Cached CIContext for blur operations (expensive to create)
+    private let ciContext = CIContext()
     
     // MARK: - Current Tool
     
@@ -75,10 +78,29 @@ class AnnotationEditorState: ObservableObject {
     
     func updateAnnotationBounds(_ id: AnnotationID, bounds: CGRect) {
         guard let index = annotations.firstIndex(where: { $0.id == id }) else { return }
-        
-        var annotation = annotations[index].annotation
-        annotation.bounds = bounds
-        annotations[index] = AnyAnnotation(annotation)
+
+        let annotation = annotations[index].annotation
+
+        // For point-based annotations (arrows/lines), translate the endpoints
+        if var arrow = annotation as? ArrowAnnotation {
+            let delta = CGPoint(
+                x: bounds.origin.x - arrow.bounds.origin.x,
+                y: bounds.origin.y - arrow.bounds.origin.y
+            )
+            arrow.translate(by: delta)
+            annotations[index] = AnyAnnotation(arrow)
+        } else if var line = annotation as? LineAnnotation {
+            let delta = CGPoint(
+                x: bounds.origin.x - line.bounds.origin.x,
+                y: bounds.origin.y - line.bounds.origin.y
+            )
+            line.translate(by: delta)
+            annotations[index] = AnyAnnotation(line)
+        } else {
+            var mutableAnnotation = annotation
+            mutableAnnotation.bounds = bounds
+            annotations[index] = AnyAnnotation(mutableAnnotation)
+        }
     }
     
     func removeAnnotation(_ id: AnnotationID) {
@@ -226,23 +248,25 @@ class AnnotationEditorState: ObservableObject {
         // Clip to blur bounds
         context.saveGState()
         context.clip(to: blur.bounds)
-        
+
         // Create blurred version of the region
         if let cgImage = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
             let ciImage = CIImage(cgImage: cgImage)
-            let filter = CIFilter(name: "CIGaussianBlur")!
+            guard let filter = CIFilter(name: "CIGaussianBlur") else {
+                context.restoreGState()
+                return
+            }
             filter.setValue(ciImage, forKey: kCIInputImageKey)
             filter.setValue(blur.blurRadius, forKey: kCIInputRadiusKey)
-            
+
             if let outputImage = filter.outputImage {
-                let ciContext = CIContext()
                 if let blurredCGImage = ciContext.createCGImage(outputImage, from: ciImage.extent) {
                     // Draw the blurred image in the clipped region
                     context.draw(blurredCGImage, in: CGRect(origin: .zero, size: imageSize))
                 }
             }
         }
-        
+
         context.restoreGState()
     }
 }

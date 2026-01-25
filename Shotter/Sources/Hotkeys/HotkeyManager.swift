@@ -69,8 +69,10 @@ class HotkeyManager {
             return
         }
         
-        // Create event tap for key down events
-        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+        // Create event tap for key down events and tap disable notifications
+        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue) |
+                                      (1 << CGEventType.tapDisabledByTimeout.rawValue) |
+                                      (1 << CGEventType.tapDisabledByUserInput.rawValue)
         
         // We need to use a callback that can capture self
         let callback: CGEventTapCallBack = { proxy, type, event, refcon in
@@ -104,6 +106,15 @@ class HotkeyManager {
     }
     
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        // Handle tap being disabled by system - re-enable it
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            logger.warning("Event tap was disabled by system, re-enabling...")
+            if let tap = eventTap {
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+            return Unmanaged.passRetained(event)
+        }
+
         guard type == .keyDown else {
             return Unmanaged.passRetained(event)
         }

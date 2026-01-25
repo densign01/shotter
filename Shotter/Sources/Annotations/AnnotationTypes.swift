@@ -111,7 +111,20 @@ struct ArrowAnnotation: Annotation {
             height: abs(endPoint.y - startPoint.y)
         ).insetBy(dx: -headLength, dy: -headLength)
     }
-    
+
+    mutating func translate(by delta: CGPoint) {
+        startPoint.x += delta.x
+        startPoint.y += delta.y
+        endPoint.x += delta.x
+        endPoint.y += delta.y
+        updateBounds()
+    }
+
+    /// Arrows don't support resize handles - only translation
+    func resizeHandles() -> [ResizeHandle] {
+        return []
+    }
+
     static func == (lhs: ArrowAnnotation, rhs: ArrowAnnotation) -> Bool {
         lhs.id == rhs.id
     }
@@ -336,7 +349,20 @@ struct LineAnnotation: Annotation {
             height: abs(endPoint.y - startPoint.y)
         )
     }
-    
+
+    mutating func translate(by delta: CGPoint) {
+        startPoint.x += delta.x
+        startPoint.y += delta.y
+        endPoint.x += delta.x
+        endPoint.y += delta.y
+        updateBounds()
+    }
+
+    /// Lines don't support resize handles - only translation
+    func resizeHandles() -> [ResizeHandle] {
+        return []
+    }
+
     static func == (lhs: LineAnnotation, rhs: LineAnnotation) -> Bool {
         lhs.id == rhs.id
     }
@@ -501,16 +527,18 @@ struct BlurAnnotation: Annotation {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return nil
         }
-        
+
         let ciImage = CIImage(cgImage: cgImage)
-        let filter = CIFilter(name: "CIGaussianBlur")!
+        guard let filter = CIFilter(name: "CIGaussianBlur") else {
+            return nil
+        }
         filter.setValue(ciImage, forKey: kCIInputImageKey)
         filter.setValue(blurRadius, forKey: kCIInputRadiusKey)
-        
+
         guard let outputImage = filter.outputImage else {
             return nil
         }
-        
+
         let context = CIContext()
         guard let blurredCGImage = context.createCGImage(outputImage, from: ciImage.extent) else {
             return nil

@@ -123,6 +123,7 @@ class OverlayWindow: NSPanel {
         // Create SwiftUI view
         let overlayView = OverlayView(
             image: image,
+            savedURL: savedURL,
             onCopy: onCopy,
             onSave: onSave,
             onAnnotate: onAnnotate,
@@ -174,11 +175,12 @@ class OverlayWindow: NSPanel {
 
 struct OverlayView: View {
     let image: NSImage
+    let savedURL: URL?
     let onCopy: () -> Void
     let onSave: () -> Void
     let onAnnotate: () -> Void
     let onDismiss: () -> Void
-    
+
     @State private var isHovering = false
     
     var body: some View {
@@ -208,7 +210,8 @@ struct OverlayView: View {
                     Label("Show in Finder", systemImage: "folder")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(OverlayButtonStyle())
+                .buttonStyle(OverlayButtonStyle(disabled: savedURL == nil))
+                .disabled(savedURL == nil)
                 
                 Button(action: onAnnotate) {
                     Label("Annotate", systemImage: "pencil.tip.crop.circle")
@@ -262,6 +265,7 @@ struct OverlayButtonStyle: ButtonStyle {
 #Preview {
     OverlayView(
         image: NSImage(systemSymbolName: "photo", accessibilityDescription: nil)!,
+        savedURL: URL(fileURLWithPath: "/tmp/test.png"),
         onCopy: {},
         onSave: {},
         onAnnotate: {},

@@ -1,6 +1,40 @@
 import AppKit
 import ScreenCaptureKit
 
+// MARK: - Coordinate Conversion Utilities
+
+extension NSScreen {
+    /// The main display's height - used as the flip reference for SCK coordinate conversion.
+    /// SCK coordinates are anchored to the main display's top-left corner, not the full virtual display.
+    private static var mainDisplayHeight: CGFloat {
+        // Main screen is always first in the screens array and has origin at (0, 0)
+        screens.first?.frame.height ?? 0
+    }
+
+    /// Convert Cocoa point (bottom-left origin) to ScreenCaptureKit point (top-left origin)
+    /// SCK uses main display's top-left as origin; Y increases downward.
+    static func convertToSCK(_ cocoaPoint: NSPoint) -> CGPoint {
+        return CGPoint(x: cocoaPoint.x, y: mainDisplayHeight - cocoaPoint.y)
+    }
+
+    /// Convert ScreenCaptureKit point (top-left origin) to Cocoa point (bottom-left origin)
+    static func convertFromSCK(_ sckPoint: CGPoint) -> NSPoint {
+        return NSPoint(x: sckPoint.x, y: mainDisplayHeight - sckPoint.y)
+    }
+
+    /// Convert ScreenCaptureKit frame (top-left origin) to Cocoa frame (bottom-left origin)
+    static func convertFrameFromSCK(_ sckFrame: CGRect) -> NSRect {
+        // SCK frame's origin is at top-left; Cocoa frame's origin is at bottom-left
+        // The bottom of the SCK frame in Cocoa coords is: mainHeight - (sckY + sckHeight)
+        return NSRect(
+            x: sckFrame.origin.x,
+            y: mainDisplayHeight - sckFrame.origin.y - sckFrame.height,
+            width: sckFrame.width,
+            height: sckFrame.height
+        )
+    }
+}
+
 /// Result of area/window selection - either an area rect or a window
 enum AreaSelectorResult {
     case area(CGRect, NSScreen)
@@ -196,14 +230,12 @@ class AreaSelectionCoordinator {
     }
     
     private func findWindowAt(_ point: NSPoint) -> SCWindow? {
-        // Convert Cocoa coordinates to SCK coordinates (flip Y)
-        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
-        let sckPoint = NSPoint(x: point.x, y: mainScreenHeight - point.y)
-        
+        // Convert Cocoa coordinates to SCK coordinates using full virtual display bounds
+        let sckPoint = NSScreen.convertToSCK(point)
+
         // Find windows that contain this point (front to back)
         for window in availableWindows.reversed() {
-            let frame = window.frame
-            if frame.contains(sckPoint) {
+            if window.frame.contains(sckPoint) {
                 return window
             }
         }
@@ -410,23 +442,15 @@ class AreaSelectionView: NSView {
     }
     
     private func convertWindowFrameToView(_ windowFrame: CGRect) -> NSRect {
-        // ScreenCaptureKit uses top-left origin coordinates
-        // NSView uses bottom-left origin coordinates
-        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
-        let mainScreenOrigin = NSScreen.screens.first?.frame.origin ?? .zero
-        
         // Convert from SCK coordinates (top-left origin) to Cocoa coordinates (bottom-left origin)
-        let flippedY = mainScreenHeight - windowFrame.origin.y - windowFrame.height
-        
-        // Convert to this view's coordinate space
-        let localX = windowFrame.origin.x - screen.frame.origin.x
-        let localY = flippedY - screen.frame.origin.y + mainScreenOrigin.y
-        
+        let cocoaFrame = NSScreen.convertFrameFromSCK(windowFrame)
+
+        // Convert to this view's local coordinate space
         return NSRect(
-            x: localX,
-            y: localY,
-            width: windowFrame.width,
-            height: windowFrame.height
+            x: cocoaFrame.origin.x - screen.frame.origin.x,
+            y: cocoaFrame.origin.y - screen.frame.origin.y,
+            width: cocoaFrame.width,
+            height: cocoaFrame.height
         )
     }
     

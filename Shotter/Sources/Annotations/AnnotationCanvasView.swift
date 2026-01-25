@@ -5,7 +5,10 @@ import SwiftUI
 class AnnotationCanvasView: NSView {
     var state: AnnotationEditorState?
     private var trackingArea: NSTrackingArea?
-    
+
+    // Cached CIContext for blur operations (expensive to create)
+    private let ciContext = CIContext()
+
     // Scale and offset for zooming/panning (future feature)
     var scale: CGFloat = 1.0
     var offset: CGPoint = .zero
@@ -174,12 +177,14 @@ class AnnotationCanvasView: NSView {
         
         // Apply blur using Core Image
         let ciImage = CIImage(cgImage: cgImage)
-        let filter = CIFilter(name: "CIGaussianBlur")!
+        guard let filter = CIFilter(name: "CIGaussianBlur") else {
+            context.restoreGState()
+            return
+        }
         filter.setValue(ciImage, forKey: kCIInputImageKey)
         filter.setValue(blur.blurRadius, forKey: kCIInputRadiusKey)
-        
+
         if let outputImage = filter.outputImage {
-            let ciContext = CIContext()
             // Extend the crop rect to account for blur edge effects
             let cropRect = ciImage.extent.insetBy(dx: -blur.blurRadius * 2, dy: -blur.blurRadius * 2)
             if let blurredCGImage = ciContext.createCGImage(outputImage, from: cropRect) {
