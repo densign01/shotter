@@ -82,30 +82,35 @@ class AreaSelectionView: NSView {
     override var acceptsFirstResponder: Bool { true }
     
     override func draw(_ dirtyRect: NSRect) {
-        // Semi-transparent overlay
-        NSColor.black.withAlphaComponent(0.3).setFill()
-        dirtyRect.fill()
-        
         // Draw selection rectangle if selecting
         if let start = selectionStart, let end = selectionEnd {
             let selectionRect = rectFromPoints(start, end)
-            
-            // Clear the selection area (make it transparent)
-            NSColor.clear.setFill()
-            selectionRect.fill()
-            
-            // Draw border
+
+            // Create a path that covers the entire view but excludes the selection
+            let overlayPath = NSBezierPath(rect: bounds)
+            overlayPath.append(NSBezierPath(rect: selectionRect).reversed)
+            overlayPath.windingRule = .evenOdd
+
+            // Fill the overlay (everything except selection)
+            NSColor.black.withAlphaComponent(0.3).setFill()
+            overlayPath.fill()
+
+            // Draw border around selection
             NSColor.white.setStroke()
-            let path = NSBezierPath(rect: selectionRect)
-            path.lineWidth = 2
-            path.stroke()
-            
+            let borderPath = NSBezierPath(rect: selectionRect)
+            borderPath.lineWidth = 2
+            borderPath.stroke()
+
             // Draw dashed inner border
             NSColor.white.withAlphaComponent(0.5).setStroke()
             let dashPath = NSBezierPath(rect: selectionRect.insetBy(dx: 1, dy: 1))
             dashPath.lineWidth = 1
             dashPath.setLineDash([4, 4], count: 2, phase: 0)
             dashPath.stroke()
+        } else {
+            // No selection yet - fill entire view with dim overlay
+            NSColor.black.withAlphaComponent(0.3).setFill()
+            bounds.fill()
         }
     }
     
