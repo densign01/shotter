@@ -184,44 +184,56 @@ struct OverlayView: View {
     @State private var isHovering = false
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Thumbnail
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 80, height: 60)
-                .cornerRadius(6)
-                .shadow(radius: 2)
-                .onDrag {
-                    // Enable drag and drop
-                    let provider = NSItemProvider(object: image)
-                    return provider
+        ZStack(alignment: .topLeading) {
+            // Main content
+            HStack(spacing: 12) {
+                // Thumbnail
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 80, height: 60)
+                    .cornerRadius(6)
+                    .shadow(radius: 2)
+                    .onDrag {
+                        // Enable drag and drop
+                        let provider = NSItemProvider(object: image)
+                        return provider
+                    }
+
+                // Action buttons
+                VStack(alignment: .leading, spacing: 6) {
+                    Button(action: onCopy) {
+                        Label("Copy", systemImage: "doc.on.doc")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(OverlayButtonStyle())
+
+                    Button(action: onSave) {
+                        Label("Show in Finder", systemImage: "folder")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(OverlayButtonStyle(disabled: savedURL == nil))
+                    .disabled(savedURL == nil)
+
+                    Button(action: onAnnotate) {
+                        Label("Annotate", systemImage: "pencil.tip.crop.circle")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(OverlayButtonStyle())
                 }
-            
-            // Action buttons
-            VStack(alignment: .leading, spacing: 6) {
-                Button(action: onCopy) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(OverlayButtonStyle())
-                
-                Button(action: onSave) {
-                    Label("Show in Finder", systemImage: "folder")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(OverlayButtonStyle(disabled: savedURL == nil))
-                .disabled(savedURL == nil)
-                
-                Button(action: onAnnotate) {
-                    Label("Annotate", systemImage: "pencil.tip.crop.circle")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(OverlayButtonStyle())
+                .frame(width: 130)
             }
-            .frame(width: 130)
-            
-            // Close button
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            )
+
+            // Close button positioned at top-left corner
             Button(action: onDismiss) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
@@ -229,16 +241,8 @@ struct OverlayView: View {
             }
             .buttonStyle(.plain)
             .opacity(isHovering ? 1 : 0.5)
+            .padding(6)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        )
         .onHover { hovering in
             isHovering = hovering
         }
