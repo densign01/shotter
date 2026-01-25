@@ -19,9 +19,9 @@ class OverlayController {
         overlayWindow = OverlayWindow(
             image: image,
             savedURL: savedURL,
-            onCopy: {
+            onCopy: { [weak self] in
                 onCopy()
-                self.flashSuccess()
+                self?.dismissOverlay()
             },
             onSave: onSave,
             onAnnotate: onAnnotate,

@@ -10,6 +10,14 @@ struct ShotterApp: App {
         Settings {
             PreferencesView()
         }
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Preferences...") {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
     }
 }
 
@@ -18,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyManager: HotkeyManager?
     private var captureEngine: CaptureEngine?
     private var overlayController: OverlayController?
+    private var preferencesWindow: NSWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon - menu bar only
@@ -125,7 +134,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func openPreferences() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        if preferencesWindow == nil {
+            let prefsView = PreferencesView()
+            let hostingController = NSHostingController(rootView: prefsView)
+            
+            let window = NSWindow(contentViewController: hostingController)
+            window.title = "Shotter Preferences"
+            window.styleMask = [.titled, .closable]
+            window.setContentSize(NSSize(width: 450, height: 350))
+            window.center()
+            
+            preferencesWindow = window
+        }
+        
+        preferencesWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
     
