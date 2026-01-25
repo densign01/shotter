@@ -46,9 +46,15 @@ class PreferencesManager: ObservableObject {
             saveLocation = picturesURL.appendingPathComponent("Shotter")
         }
         
-        // Load overlay delay
+        // Load overlay delay (-1 means never, 0 means not set)
         let delay = defaults.double(forKey: Keys.overlayAutoDismissDelay)
-        overlayAutoDismissDelay = delay > 0 ? delay : 5.0
+        if delay < 0 {
+            overlayAutoDismissDelay = -1.0  // Never auto-dismiss
+        } else if delay > 0 {
+            overlayAutoDismissDelay = delay
+        } else {
+            overlayAutoDismissDelay = 5.0   // Default
+        }
         
         // Load launch at login
         launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)

@@ -25,7 +25,7 @@ struct PreferencesView: View {
                         Text("3 seconds").tag(3.0)
                         Text("5 seconds").tag(5.0)
                         Text("10 seconds").tag(10.0)
-                        Text("Never").tag(Double.infinity)
+                        Text("Never").tag(-1.0)
                     }
                     .frame(width: 120)
                 }

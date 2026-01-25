@@ -64,22 +64,31 @@ class HotkeyManager {
     }
     
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        // Handle tap being disabled by macOS (timeout or user input)
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            logger.warning("Event tap was disabled by macOS, re-enabling...")
+            if let tap = eventTap {
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
+            return Unmanaged.passRetained(event)
+        }
+
         guard type == .keyDown else {
             return Unmanaged.passRetained(event)
         }
-        
+
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
-        
+
         // Check for Command + Shift modifier
         let hasCommandShift = flags.contains([.maskCommand, .maskShift]) &&
                              !flags.contains(.maskControl) &&
                              !flags.contains(.maskAlternate)
-        
+
         guard hasCommandShift else {
             return Unmanaged.passRetained(event)
         }
-        
+
         // Key code 20 = "3", Key code 21 = "4"
         switch keyCode {
         case 20: // ⌘⇧3 - Fullscreen
@@ -87,13 +96,13 @@ class HotkeyManager {
                 self.onFullscreen()
             }
             return nil // Consume the event
-            
+
         case 21: // ⌘⇧4 - Area
             DispatchQueue.main.async {
                 self.onArea()
             }
             return nil // Consume the event
-            
+
         default:
             return Unmanaged.passRetained(event)
         }
