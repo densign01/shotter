@@ -202,23 +202,50 @@ struct AnnotationEditorView: View {
     let onCancel: () -> Void
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Toolbar
-            AnnotationToolbar(state: state, onSave: onSave, onCopy: onCopy, onCancel: onCancel)
-            
-            Divider()
-            
-            // Canvas
-            AnnotationCanvasRepresentable(state: state)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
-            // Bottom bar with tool options
-            if state.currentToolType != .select {
+        ZStack {
+            VStack(spacing: 0) {
+                // Toolbar
+                AnnotationToolbar(state: state, onSave: onSave, onCopy: onCopy, onCancel: onCancel)
+                
                 Divider()
-                ToolOptionsBar(state: state)
+                
+                // Canvas
+                GeometryReader { geometry in
+                    ZStack {
+                        AnnotationCanvasRepresentable(state: state)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        
+                        // Text editor overlay
+                        if state.editingTextAnnotationId != nil {
+                            TextEditorOverlay(
+                                state: state,
+                                canvasRect: geometry.frame(in: .local),
+                                scale: calculateScale(for: geometry.size)
+                            )
+                        }
+                    }
+                }
+                
+                // Bottom bar with tool options
+                if state.currentToolType != .select {
+                    Divider()
+                    ToolOptionsBar(state: state)
+                }
             }
+            .background(Color(NSColor.controlBackgroundColor))
         }
-        .background(Color(NSColor.controlBackgroundColor))
+    }
+    
+    private func calculateScale(for viewSize: CGSize) -> CGFloat {
+        let imageSize = state.imageSize
+        let imageAspect = imageSize.width / imageSize.height
+        let viewAspect = viewSize.width / viewSize.height
+        
+        if imageAspect > viewAspect {
+            return viewSize.width / imageSize.width
+        } else {
+            return viewSize.height / imageSize.height
+        }
     }
 }
 

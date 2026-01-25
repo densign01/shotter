@@ -166,6 +166,9 @@ class AnnotationCanvasView: NSView {
             height: blur.bounds.height * scale
         )
         
+        // Only proceed if blur region has meaningful size
+        guard scaledBounds.width > 2 && scaledBounds.height > 2 else { return }
+        
         context.saveGState()
         context.clip(to: scaledBounds)
         
@@ -173,12 +176,21 @@ class AnnotationCanvasView: NSView {
         let ciImage = CIImage(cgImage: cgImage)
         let filter = CIFilter(name: "CIGaussianBlur")!
         filter.setValue(ciImage, forKey: kCIInputImageKey)
-        filter.setValue(blur.blurRadius * scale, forKey: kCIInputRadiusKey)
+        filter.setValue(blur.blurRadius, forKey: kCIInputRadiusKey)
         
         if let outputImage = filter.outputImage {
             let ciContext = CIContext()
-            if let blurredCGImage = ciContext.createCGImage(outputImage, from: ciImage.extent) {
-                context.draw(blurredCGImage, in: imageRect)
+            // Extend the crop rect to account for blur edge effects
+            let cropRect = ciImage.extent.insetBy(dx: -blur.blurRadius * 2, dy: -blur.blurRadius * 2)
+            if let blurredCGImage = ciContext.createCGImage(outputImage, from: cropRect) {
+                // Adjust drawing rect to account for extended crop
+                let adjustedRect = CGRect(
+                    x: imageRect.origin.x - blur.blurRadius * 2 * scale,
+                    y: imageRect.origin.y - blur.blurRadius * 2 * scale,
+                    width: imageRect.width + blur.blurRadius * 4 * scale,
+                    height: imageRect.height + blur.blurRadius * 4 * scale
+                )
+                context.draw(blurredCGImage, in: adjustedRect)
             }
         }
         
@@ -242,6 +254,19 @@ class AnnotationCanvasView: NSView {
         // Check if within image bounds
         let imageBounds = CGRect(origin: .zero, size: state.imageSize)
         guard imageBounds.contains(imagePoint) else { return }
+        
+        // Handle double-click for text editing
+        if event.clickCount == 2 {
+            for annotation in state.annotations.reversed() {
+                if annotation.annotation is TextAnnotation,
+                   annotation.annotation.hitTest(point: imagePoint, tolerance: 5) {
+                    state.selectAnnotation(annotation.id)
+                    state.editingTextAnnotationId = annotation.id
+                    needsDisplay = true
+                    return
+                }
+            }
+        }
         
         state.currentTool.mouseDown(at: imagePoint, state: state)
         needsDisplay = true
