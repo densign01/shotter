@@ -127,8 +127,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         NSWorkspace.shared.activateFileViewerSelecting([savedURL])
                     },
                     onAnnotate: {
-                        // v2: Open annotation editor
-                        self.showAnnotateComingSoon()
+                        self.overlayController?.dismissOverlay()
+                        self.openAnnotationEditor(image: image, savedURL: savedURL)
                     }
                 )
             case .failure(let error):
@@ -144,7 +144,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         // Can't show in Finder since save failed
                     },
                     onAnnotate: {
-                        self.showAnnotateComingSoon()
+                        self.overlayController?.dismissOverlay()
+                        self.openAnnotationEditor(image: image, savedURL: nil)
                     }
                 )
             }
@@ -241,13 +242,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
     
-    private func showAnnotateComingSoon() {
-        let alert = NSAlert()
-        alert.messageText = "Coming Soon"
-        alert.informativeText = "Annotation tools will be available in Shotter v2."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+    private func openAnnotationEditor(image: NSImage, savedURL: URL?) {
+        AnnotationEditorController.shared.openEditor(
+            image: image,
+            savedURL: savedURL,
+            onComplete: { _ in
+                // Annotation complete - image was saved
+            },
+            onCancel: {
+                // Annotation cancelled
+            }
+        )
     }
     
     private func checkPermissions() async {

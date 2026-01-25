@@ -214,7 +214,7 @@ struct OverlayView: View {
                     Label("Annotate", systemImage: "pencil.tip.crop.circle")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(OverlayButtonStyle(disabled: true))
+                .buttonStyle(OverlayButtonStyle())
             }
             .frame(width: 130)
             
