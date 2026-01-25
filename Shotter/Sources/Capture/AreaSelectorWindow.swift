@@ -268,37 +268,46 @@ class AreaSelectionCoordinator {
 }
 
 /// Individual overlay window for one screen
-class AreaOverlayWindow: NSWindow {
+class AreaOverlayWindow: NSPanel {
     private var selectionView: AreaSelectionView?
     private weak var coordinator: AreaSelectionCoordinator?
     let associatedScreen: NSScreen
-    
+
+    // Required for borderless panels to receive key events
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
     init(screen: NSScreen, coordinator: AreaSelectionCoordinator) {
         self.coordinator = coordinator
         self.associatedScreen = screen
-        
+
         super.init(
             contentRect: screen.frame,
-            styleMask: .borderless,
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        
-        // Configure window
+
+        // Configure panel
         self.isOpaque = false
         self.backgroundColor = .clear
         self.level = .screenSaver
+        self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.ignoresMouseEvents = false
         self.acceptsMouseMovedEvents = true
         self.hasShadow = false
-        
-        // Create selection view
-        let view = AreaSelectionView(frame: screen.frame, screen: screen, coordinator: coordinator)
+        self.hidesOnDeactivate = false
+        self.isFloatingPanel = true
+        self.becomesKeyOnlyIfNeeded = false
+
+        // Create selection view - use local bounds (0,0 origin), not screen coordinates
+        let viewFrame = NSRect(origin: .zero, size: screen.frame.size)
+        let view = AreaSelectionView(frame: viewFrame, screen: screen, coordinator: coordinator)
         coordinator.views.append(view)
         selectionView = view
         self.contentView = view
     }
-    
+
     func show() {
         self.makeKeyAndOrderFront(nil)
         if let view = selectionView {
@@ -315,7 +324,10 @@ class AreaSelectionView: NSView {
     private var trackingArea: NSTrackingArea?
     
     override var acceptsFirstResponder: Bool { true }
-    
+
+    // Accept mouse events without requiring window activation first
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
     init(frame: NSRect, screen: NSScreen, coordinator: AreaSelectionCoordinator) {
         self.screen = screen
         self.coordinator = coordinator

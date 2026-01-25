@@ -32,7 +32,11 @@ struct WindowSelectionResult {
 
 class CaptureEngine {
     private var availableContent: SCShareableContent?
-    
+
+    // Retain selectors to prevent deallocation while showing
+    private var activeAreaSelector: AreaSelectorWindow?
+    private var activeWindowSelector: WindowSelectorController?
+
     init() {
         Task {
             await refreshAvailableContent()
@@ -272,6 +276,9 @@ class CaptureEngine {
     private func showAreaSelector() async -> AreaSelectorInternalResult {
         return await withCheckedContinuation { continuation in
             let selector = AreaSelectorWindow { [weak self] result in
+                // Release the selector now that we're done
+                self?.activeAreaSelector = nil
+
                 switch result {
                 case .area(let rect, let screen):
                     // Find the matching CaptureDisplay
@@ -289,6 +296,8 @@ class CaptureEngine {
                     continuation.resume(returning: .cancelled)
                 }
             }
+            // Retain the selector to prevent deallocation
+            self.activeAreaSelector = selector
             selector.show()
         }
     }
@@ -297,11 +306,15 @@ class CaptureEngine {
     private func showWindowSelector() async -> SCWindow? {
         await refreshAvailableContent()
         let windows = await getAvailableWindows()
-        
+
         return await withCheckedContinuation { continuation in
-            let selector = WindowSelectorController(windows: windows) { window in
+            let selector = WindowSelectorController(windows: windows) { [weak self] window in
+                // Release the selector now that we're done
+                self?.activeWindowSelector = nil
                 continuation.resume(returning: window)
             }
+            // Retain the selector to prevent deallocation
+            self.activeWindowSelector = selector
             selector.show()
         }
     }
