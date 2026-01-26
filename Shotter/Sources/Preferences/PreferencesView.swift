@@ -36,7 +36,18 @@ struct PreferencesView: View {
                     }
                     .frame(width: 120)
                 }
-                
+
+                HStack {
+                    Text("Overlay position:")
+                    Spacer()
+                    Picker("", selection: $prefs.overlayPosition) {
+                        ForEach(OverlayPosition.allCases, id: \.self) { position in
+                            Text(position.displayName).tag(position)
+                        }
+                    }
+                    .frame(width: 120)
+                }
+
                 Toggle("Play capture sound", isOn: $prefs.playCaptureSound)
 
                 Toggle("Auto-copy to clipboard", isOn: $prefs.autoCopyToClipboard)

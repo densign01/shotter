@@ -6,6 +6,19 @@ import os.log
 
 private let logger = Logger(subsystem: "com.densign.shotter", category: "Preferences")
 
+/// Position for the screenshot overlay
+enum OverlayPosition: String, CaseIterable {
+    case bottomLeft = "bottomLeft"
+    case bottomRight = "bottomRight"
+
+    var displayName: String {
+        switch self {
+        case .bottomLeft: return "Bottom Left"
+        case .bottomRight: return "Bottom Right"
+        }
+    }
+}
+
 /// Represents a keyboard shortcut configuration
 struct ShortcutConfig: Codable, Equatable {
     var keyCode: Int
@@ -80,6 +93,7 @@ class PreferencesManager: ObservableObject {
         static let shortcutFullscreen = "shortcutFullscreen"
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
+        static let overlayPosition = "overlayPosition"
     }
     
     @Published var saveLocation: URL {
@@ -133,7 +147,13 @@ class PreferencesManager: ObservableObject {
             NotificationCenter.default.post(name: .shortcutsDidChange, object: nil)
         }
     }
-    
+
+    @Published var overlayPosition: OverlayPosition {
+        didSet {
+            defaults.set(overlayPosition.rawValue, forKey: Keys.overlayPosition)
+        }
+    }
+
     private func saveShortcut(_ config: ShortcutConfig, forKey key: String) {
         if let data = try? JSONEncoder().encode(config) {
             defaults.set(data, forKey: key)
@@ -186,6 +206,14 @@ class PreferencesManager: ObservableObject {
         shortcutFullscreen = Self.loadShortcut(from: defaults, forKey: Keys.shortcutFullscreen, default: .defaultFullscreen)
         shortcutArea = Self.loadShortcut(from: defaults, forKey: Keys.shortcutArea, default: .defaultArea)
         shortcutWindow = Self.loadShortcut(from: defaults, forKey: Keys.shortcutWindow, default: .defaultWindow)
+
+        // Load overlay position (default to bottom-left)
+        if let positionString = defaults.string(forKey: Keys.overlayPosition),
+           let position = OverlayPosition(rawValue: positionString) {
+            overlayPosition = position
+        } else {
+            overlayPosition = .bottomLeft
+        }
     }
     
     private func updateLaunchAtLogin() {

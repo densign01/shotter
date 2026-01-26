@@ -162,12 +162,20 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
         // visibleFrame excludes dock and menu bar
         let visibleFrame = screen.visibleFrame
 
-        // Check dock orientation from system preferences.
-        let dockOrientation = UserDefaults.standard.persistentDomain(forName: "com.apple.dock")?["orientation"] as? String ?? "bottom"
-        let dockOnLeft = dockOrientation == "left"
-        let dockReserve: CGFloat = 70
+        // Calculate x position based on preference
+        let position = PreferencesManager.shared.overlayPosition
+        let xOffset: CGFloat
 
-        let xOffset = dockOnLeft ? max(visibleFrame.minX + padding, dockReserve) : visibleFrame.minX + padding
+        if position == .bottomRight {
+            // Right edge minus overlay width minus padding
+            xOffset = visibleFrame.maxX - overlayWidth - padding
+        } else {
+            // Bottom-left: check dock orientation for left-side dock
+            let dockOrientation = UserDefaults.standard.persistentDomain(forName: "com.apple.dock")?["orientation"] as? String ?? "bottom"
+            let dockOnLeft = dockOrientation == "left"
+            let dockReserve: CGFloat = 70
+            xOffset = dockOnLeft ? max(visibleFrame.minX + padding, dockReserve) : visibleFrame.minX + padding
+        }
 
         let frame = NSRect(
             x: xOffset,
