@@ -68,10 +68,13 @@ class WindowSelectorController {
 }
 
 /// Overlay window for one screen during window selection
-class WindowSelectorOverlay: NSWindow {
+class WindowSelectorOverlay: NSPanel {
     private var selectorView: WindowSelectorView?
     let associatedScreen: NSScreen
-    
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
     init(
         screen: NSScreen,
         windows: [SCWindow],
@@ -80,21 +83,23 @@ class WindowSelectorOverlay: NSWindow {
         onCancel: @escaping () -> Void
     ) {
         self.associatedScreen = screen
-        
+
         super.init(
             contentRect: screen.frame,
-            styleMask: .borderless,
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        
-        // Configure window
+
+        // Configure panel for keyboard event delivery
         self.isOpaque = false
         self.backgroundColor = .clear
         self.level = .screenSaver
         self.ignoresMouseEvents = false
         self.acceptsMouseMovedEvents = true
         self.hasShadow = false
+        self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        self.becomesKeyOnlyIfNeeded = false
         
         // Create selector view
         let view = WindowSelectorView(
