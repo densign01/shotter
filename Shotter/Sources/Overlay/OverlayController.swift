@@ -132,6 +132,9 @@ class OverlayWindow: NSPanel {
         
         hostingView = NSHostingView(rootView: overlayView)
         hostingView?.frame = NSRect(x: 0, y: 0, width: overlayWidth, height: overlayHeight)
+        // Prevent SwiftUI from collapsing the view below minimum size
+        hostingView?.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        hostingView?.setContentHuggingPriority(.defaultLow, for: .vertical)
         self.contentView = hostingView
         
         // Enable dragging the image out
@@ -185,11 +188,12 @@ struct OverlayView: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Thumbnail
+            // Thumbnail - fixed frame ensures consistent sizing regardless of image dimensions
             Image(nsImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 80, height: 60)
+                .frame(minWidth: 80, maxWidth: 80, minHeight: 60, maxHeight: 60, alignment: .center)
+                .clipped()
                 .cornerRadius(6)
                 .shadow(radius: 2)
                 .onDrag {
@@ -239,6 +243,7 @@ struct OverlayView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(0.2), lineWidth: 1)
         )
+        .frame(minWidth: 300, minHeight: 100) // Enforce minimum size to prevent controls from being cut off
         .onHover { hovering in
             isHovering = hovering
         }
