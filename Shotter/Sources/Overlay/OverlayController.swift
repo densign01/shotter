@@ -91,8 +91,8 @@ class OverlayWindow: NSPanel {
         onAnnotate: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
-        // Fixed size container keeps image + action bar together (CleanShot-style)
-        guard NSScreen.main != nil else {
+        // Fixed size container; position above dock using visibleFrame
+        guard let screen = NSScreen.main else {
             super.init(
                 contentRect: .zero,
                 styleMask: [.borderless, .nonactivatingPanel, .hudWindow],
@@ -106,9 +106,12 @@ class OverlayWindow: NSPanel {
         let overlayHeight = OverlayLayout.overlayHeight
         let padding: CGFloat = 20
 
+        // visibleFrame excludes dock and menu bar
+        let visibleFrame = screen.visibleFrame
+
         let frame = NSRect(
-            x: padding,
-            y: padding,
+            x: visibleFrame.minX + padding,
+            y: visibleFrame.minY + padding,
             width: overlayWidth,
             height: overlayHeight
         )
