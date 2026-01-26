@@ -9,9 +9,9 @@ class HotkeyManager {
     private var runLoopSource: CFRunLoopSource?
     private var shortcutObserver: NSObjectProtocol?
     
-    private let onFullscreen: () -> Void
-    private let onArea: () -> Void
-    private let onWindow: () -> Void
+    private let onFullscreen: (Bool) -> Void  // Bool = directCopy (Option held)
+    private let onArea: (Bool) -> Void
+    private let onWindow: (Bool) -> Void
     
     // Cache shortcuts for performance
     private var fullscreenShortcut: ShortcutConfig
@@ -19,9 +19,9 @@ class HotkeyManager {
     private var windowShortcut: ShortcutConfig
     
     init(
-        onFullscreen: @escaping () -> Void,
-        onArea: @escaping () -> Void,
-        onWindow: @escaping () -> Void
+        onFullscreen: @escaping (Bool) -> Void,
+        onArea: @escaping (Bool) -> Void,
+        onWindow: @escaping (Bool) -> Void
     ) {
         self.onFullscreen = onFullscreen
         self.onArea = onArea
@@ -121,27 +121,28 @@ class HotkeyManager {
         
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
-        
-        // Check fullscreen shortcut
-        if fullscreenShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: fullscreenShortcut) {
+        let optionHeld = flags.contains(.maskAlternate)
+
+        // Check fullscreen shortcut (allow Option as extra modifier for direct-copy)
+        if fullscreenShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: fullscreenShortcut, allowExtraOption: true) {
             DispatchQueue.main.async {
-                self.onFullscreen()
+                self.onFullscreen(optionHeld)
             }
             return nil // Consume the event
         }
-        
+
         // Check area shortcut
-        if areaShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: areaShortcut) {
+        if areaShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: areaShortcut, allowExtraOption: true) {
             DispatchQueue.main.async {
-                self.onArea()
+                self.onArea(optionHeld)
             }
             return nil // Consume the event
         }
-        
+
         // Check window shortcut (only if enabled - disabled by default)
-        if windowShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: windowShortcut) {
+        if windowShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: windowShortcut, allowExtraOption: true) {
             DispatchQueue.main.async {
-                self.onWindow()
+                self.onWindow(optionHeld)
             }
             return nil // Consume the event
         }
@@ -149,17 +150,25 @@ class HotkeyManager {
         return Unmanaged.passRetained(event)
     }
     
-    private func matchesShortcut(keyCode: Int, flags: CGEventFlags, shortcut: ShortcutConfig) -> Bool {
+    private func matchesShortcut(keyCode: Int, flags: CGEventFlags, shortcut: ShortcutConfig, allowExtraOption: Bool = false) -> Bool {
         guard keyCode == shortcut.keyCode else { return false }
-        
+
         let requiredFlags = CGEventFlags(rawValue: UInt64(shortcut.modifiers))
-        
+
         // Check that all required modifiers are present
         let hasCommand = flags.contains(.maskCommand) == requiredFlags.contains(.maskCommand)
         let hasShift = flags.contains(.maskShift) == requiredFlags.contains(.maskShift)
-        let hasOption = flags.contains(.maskAlternate) == requiredFlags.contains(.maskAlternate)
         let hasControl = flags.contains(.maskControl) == requiredFlags.contains(.maskControl)
-        
+
+        // For Option: if allowExtraOption is true, allow it to be held even if not required
+        let hasOption: Bool
+        if allowExtraOption && !requiredFlags.contains(.maskAlternate) {
+            // Option can be either pressed or not pressed
+            hasOption = true
+        } else {
+            hasOption = flags.contains(.maskAlternate) == requiredFlags.contains(.maskAlternate)
+        }
+
         return hasCommand && hasShift && hasOption && hasControl
     }
     

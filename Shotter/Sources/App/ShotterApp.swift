@@ -52,9 +52,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         
         hotkeyManager = HotkeyManager(
-            onFullscreen: { [weak self] in self?.captureFullscreen() },
-            onArea: { [weak self] in self?.captureArea() },
-            onWindow: { [weak self] in self?.captureWindow() }
+            onFullscreen: { [weak self] directCopy in self?.captureFullscreen(directCopy: directCopy) },
+            onArea: { [weak self] directCopy in self?.captureArea(directCopy: directCopy) },
+            onWindow: { [weak self] directCopy in self?.captureWindow(directCopy: directCopy) }
         )
         
         // Check permissions on launch
@@ -68,35 +68,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
-    private func captureFullscreen() {
+    private func captureFullscreen(directCopy: Bool = false) {
         Task {
             guard let image = await captureEngine?.captureFullscreen() else {
                 logger.warning("Failed to capture fullscreen")
                 return
             }
-            handleCapture(image)
+            handleCapture(image, directCopy: directCopy)
         }
     }
-    
-    private func captureArea() {
+
+    private func captureArea(directCopy: Bool = false) {
         Task {
             guard let image = await captureEngine?.captureArea() else {
                 // User cancelled or capture failed - not necessarily an error
                 logger.info("Area capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(image)
+            handleCapture(image, directCopy: directCopy)
         }
     }
-    
-    private func captureWindow() {
+
+    private func captureWindow(directCopy: Bool = false) {
         Task {
             guard let image = await captureEngine?.captureWindowInteractive() else {
                 // User cancelled or capture failed
                 logger.info("Window capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(image)
+            handleCapture(image, directCopy: directCopy)
         }
     }
     
@@ -110,14 +110,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func handleCapture(_ image: NSImage) {
+    private func handleCapture(_ image: NSImage, directCopy: Bool = false) {
+        let prefs = PreferencesManager.shared
+
+        // Direct-copy mode: Option held + auto-copy is OFF → copy and skip overlay
+        let shouldDirectCopy = directCopy && !prefs.autoCopyToClipboard
+
         // Play capture sound if enabled
-        if PreferencesManager.shared.playCaptureSound {
+        if prefs.playCaptureSound {
             SoundManager.shared.playCaptureSound()
         }
 
         // Auto-copy to clipboard if enabled (must be on main thread for NSPasteboard)
-        if PreferencesManager.shared.autoCopyToClipboard {
+        if prefs.autoCopyToClipboard || shouldDirectCopy {
             DispatchQueue.main.async {
                 self.copyToClipboard(image)
             }
@@ -125,7 +130,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Save to file
         let result = saveImage(image)
-        
+
+        // Direct-copy mode: skip overlay entirely
+        if shouldDirectCopy {
+            logger.info("Direct-copy mode: copied to clipboard, skipping overlay")
+            return
+        }
+
         // Show overlay
         DispatchQueue.main.async {
             switch result {
