@@ -392,7 +392,11 @@ private final class OverlayDragSourceNSView: NSView, NSDraggingSource, NSFilePro
     ) {
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                try self.writePromise(to: url)
+                let filename = filePromiseProvider.suggestedName
+                    ?? self.savedURL?.lastPathComponent
+                    ?? FileNaming.generateFilename(extension: "png")
+                let destinationURL = url.appendingPathComponent(filename)
+                try self.writePromise(to: destinationURL)
                 completionHandler(nil)
                 DispatchQueue.main.async {
                     self.onDropComplete?(true)
