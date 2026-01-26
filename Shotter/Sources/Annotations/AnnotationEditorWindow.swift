@@ -135,8 +135,10 @@ class AnnotationEditorWindow: NSWindow {
         if let url = savedURL {
             saveToDisk(image: finalImage, url: url, showInFinder: false)
         } else {
-            // Generate default save location
-            let url = PreferencesManager.shared.saveLocation.appendingPathComponent(FileNaming.generateFilename())
+            // Generate default save location, ensuring directory exists
+            let saveDir = PreferencesManager.shared.saveLocation
+            try? FileManager.default.createDirectory(at: saveDir, withIntermediateDirectories: true)
+            let url = saveDir.appendingPathComponent(FileNaming.generateFilename())
             saveToDisk(image: finalImage, url: url, showInFinder: false)
         }
     }
