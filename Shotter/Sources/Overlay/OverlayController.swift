@@ -20,11 +20,12 @@ class OverlayController {
         savedURL: URL?,
         onCopy: @escaping () -> Void,
         onSave: @escaping () -> Void,
-        onAnnotate: @escaping () -> Void
+        onAnnotate: @escaping () -> Void,
+        onDelete: @escaping () -> Void
     ) {
         // Dismiss existing overlay
         dismissOverlay()
-        
+
         // Create overlay window
         overlayWindow = OverlayWindow(
             image: image,
@@ -35,6 +36,10 @@ class OverlayController {
             },
             onSave: onSave,
             onAnnotate: onAnnotate,
+            onDelete: { [weak self] in
+                onDelete()
+                self?.dismissOverlay()
+            },
             onPauseDismiss: { [weak self] in
                 self?.pauseDismissTimer()
             },
@@ -113,6 +118,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
         onCopy: @escaping () -> Void,
         onSave: @escaping () -> Void,
         onAnnotate: @escaping () -> Void,
+        onDelete: @escaping () -> Void,
         onPauseDismiss: @escaping () -> Void,
         onResumeDismiss: @escaping () -> Void,
         onDragSuccess: @escaping () -> Void,
@@ -128,9 +134,9 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
         let overlayHeight = OverlayLayout.overlayHeight
 
         // Define button exclusion zones (in window coordinates, origin bottom-left)
-        // Action bar: top-right corner
+        // Action bar: top-right corner (4 buttons now)
         let actionBarWidth: CGFloat = 50
-        let actionBarHeight: CGFloat = 120
+        let actionBarHeight: CGFloat = 156
         self.actionBarRect = NSRect(
             x: overlayWidth - actionBarWidth - OverlayLayout.actionBarOuterPadding,
             y: overlayHeight - actionBarHeight - OverlayLayout.actionBarOuterPadding,
@@ -196,6 +202,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
             onCopy: onCopy,
             onSave: onSave,
             onAnnotate: onAnnotate,
+            onDelete: onDelete,
             onPauseDismiss: onPauseDismiss,
             onResumeDismiss: onResumeDismiss,
             onDismiss: onDismiss
@@ -396,6 +403,7 @@ struct OverlayView: View {
     let onCopy: () -> Void
     let onSave: () -> Void
     let onAnnotate: () -> Void
+    let onDelete: () -> Void
     let onPauseDismiss: () -> Void
     let onResumeDismiss: () -> Void
     let onDismiss: () -> Void
@@ -424,6 +432,8 @@ struct OverlayView: View {
                         .help("Show in Finder")
                     OverlayActionButton(systemName: "pencil.tip.crop.circle", action: onAnnotate)
                         .help("Annotate")
+                    OverlayDeleteButton(action: onDelete)
+                        .help("Move to Trash")
                 }
                 .padding(OverlayLayout.actionBarInnerPadding)
                 .background(ActiveVisualEffectView(material: .hudWindow))
@@ -466,6 +476,25 @@ struct OverlayActionButton: View {
     }
 }
 
+struct OverlayDeleteButton: View {
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "trash")
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: OverlayLayout.actionButtonSize, height: OverlayLayout.actionButtonSize)
+                .foregroundColor(isHovering ? .red : .primary)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+        }
+    }
+}
+
 struct ActiveVisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material
     var blendingMode: NSVisualEffectView.BlendingMode = .withinWindow
@@ -491,6 +520,7 @@ struct ActiveVisualEffectView: NSViewRepresentable {
         onCopy: {},
         onSave: {},
         onAnnotate: {},
+        onDelete: {},
         onPauseDismiss: {},
         onResumeDismiss: {},
         onDismiss: {}

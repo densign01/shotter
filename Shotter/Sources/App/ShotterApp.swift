@@ -137,6 +137,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     onAnnotate: {
                         self.overlayController?.dismissOverlay()
                         self.openAnnotationEditor(image: image, savedURL: savedURL)
+                    },
+                    onDelete: {
+                        self.moveToTrash(savedURL)
                     }
                 )
             case .failure(let error):
@@ -154,6 +157,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     onAnnotate: {
                         self.overlayController?.dismissOverlay()
                         self.openAnnotationEditor(image: image, savedURL: nil)
+                    },
+                    onDelete: {
+                        // No file to delete since save failed
                     }
                 )
             }
@@ -226,6 +232,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([image])
+    }
+
+    private func moveToTrash(_ fileURL: URL) {
+        do {
+            try FileManager.default.trashItem(at: fileURL, resultingItemURL: nil)
+            logger.info("Screenshot moved to trash: \(fileURL.path)")
+        } catch {
+            logger.error("Failed to move screenshot to trash: \(error.localizedDescription)")
+        }
     }
     
     private func openSaveFolder() {
