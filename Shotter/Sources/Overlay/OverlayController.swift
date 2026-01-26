@@ -461,18 +461,22 @@ struct OverlayActionButton: View {
     let systemName: String
     let action: () -> Void
     var disabled: Bool = false
+    @State private var isHovering = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: OverlayLayout.actionButtonSize, height: OverlayLayout.actionButtonSize)
-                .foregroundColor(disabled ? .secondary : .primary)
+                .foregroundColor(disabled ? .secondary : (isHovering ? .primary : .secondary))
         }
         .buttonStyle(.plain)
         .disabled(disabled)
         .opacity(disabled ? 0.5 : 1)
         .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+        }
     }
 }
 
