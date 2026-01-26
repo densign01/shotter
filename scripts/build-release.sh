@@ -49,6 +49,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <string>Shotter</string>
     <key>CFBundleDisplayName</key>
     <string>Shotter</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
