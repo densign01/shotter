@@ -21,6 +21,27 @@ A macOS screenshot utility inspired by CleanShot X.
 - Screen Recording permission
 - Accessibility permission (for global hotkeys)
 
+## Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/densign01/shotter.git
+cd shotter
+
+# Build release
+swift build -c release
+
+# Copy to app bundle
+cp .build/release/Shotter Shotter.app/Contents/MacOS/
+
+# Run
+./Shotter.app/Contents/MacOS/Shotter
+```
+
+On first run, macOS will prompt for **Screen Recording** and **Accessibility** permissions. Grant both in System Settings → Privacy & Security.
+
+To quit: Click the camera icon in the menu bar → Quit, or `pkill -f Shotter.app`
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
