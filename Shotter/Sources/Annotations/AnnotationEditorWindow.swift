@@ -102,21 +102,22 @@ class AnnotationEditorWindow: NSWindow {
         }
     }
     
-    private func saveToDisk(image: NSImage, url: URL) {
+    private func saveToDisk(image: NSImage, url: URL, showInFinder: Bool = true) {
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
             showAlert(title: "Save Failed", message: "Could not convert image to PNG format.")
             return
         }
-        
+
         do {
             try pngData.write(to: url)
             onSave?(image)
             close()
-            
-            // Show in Finder
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+
+            if showInFinder {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
         } catch {
             showAlert(title: "Save Failed", message: error.localizedDescription)
         }
@@ -124,13 +125,20 @@ class AnnotationEditorWindow: NSWindow {
     
     private func copyToClipboard() {
         guard let finalImage = state.renderFinalImage() else { return }
-        
+
+        // Copy to clipboard
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([finalImage])
-        
-        // Visual feedback
-        flashWindow()
+
+        // Save to disk and close (silently, no Finder)
+        if let url = savedURL {
+            saveToDisk(image: finalImage, url: url, showInFinder: false)
+        } else {
+            // Generate default save location
+            let url = PreferencesManager.shared.saveLocation.appendingPathComponent(FileNaming.generateFilename())
+            saveToDisk(image: finalImage, url: url, showInFinder: false)
+        }
     }
     
     private func flashWindow() {
