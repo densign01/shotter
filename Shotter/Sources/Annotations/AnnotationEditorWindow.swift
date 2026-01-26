@@ -236,11 +236,9 @@ struct AnnotationEditorView: View {
                     }
                 }
                 
-                // Bottom bar with tool options
-                if state.currentToolType != .select {
-                    Divider()
-                    ToolOptionsBar(state: state)
-                }
+                // Bottom bar with tool options (always visible for consistent layout)
+                Divider()
+                ToolOptionsBar(state: state)
             }
             .background(Color(NSColor.controlBackgroundColor))
         }
@@ -290,43 +288,26 @@ struct AnnotationToolbar: View {
             
             // Undo/Redo
             HStack(spacing: 4) {
-                Button(action: { state.undo() }) {
-                    Image(systemName: "arrow.uturn.backward")
-                }
-                .buttonStyle(ToolbarButtonStyle())
-                .disabled(!state.canUndo)
-                .help("Undo (⌘Z)")
-                
-                Button(action: { state.redo() }) {
-                    Image(systemName: "arrow.uturn.forward")
-                }
-                .buttonStyle(ToolbarButtonStyle())
-                .disabled(!state.canRedo)
-                .help("Redo (⌘⇧Z)")
+                HoverIconButton(icon: "arrow.uturn.backward", tooltip: "Undo (⌘Z)", action: { state.undo() })
+                    .disabled(!state.canUndo)
+
+                HoverIconButton(icon: "arrow.uturn.forward", tooltip: "Redo (⌘⇧Z)", action: { state.redo() })
+                    .disabled(!state.canRedo)
             }
-            
+
             Divider()
                 .frame(height: 24)
-            
-            // Action buttons
-            HStack(spacing: 8) {
-                Button("Cancel") {
-                    onCancel()
-                }
-                .keyboardShortcut(.escape, modifiers: [])
-                
-                Button(action: onCopy) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-                .keyboardShortcut("c", modifiers: [.command, .shift])
-                .help("Copy to clipboard (⌘⇧C)")
-                
-                Button(action: onSave) {
-                    Label("Save", systemImage: "square.and.arrow.down")
-                }
-                .keyboardShortcut("s", modifiers: .command)
-                .buttonStyle(.borderedProminent)
-                .help("Save image (⌘S)")
+
+            // Action buttons (icon-only for compact layout)
+            HStack(spacing: 4) {
+                HoverIconButton(icon: "xmark", tooltip: "Cancel (Esc)", action: onCancel)
+                    .keyboardShortcut(.escape, modifiers: [])
+
+                HoverIconButton(icon: "doc.on.doc", tooltip: "Copy & Save (⌘⇧C)", action: onCopy)
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+
+                HoverIconButton(icon: "square.and.arrow.down", tooltip: "Save (⌘S)", isPrimary: true, action: onSave)
+                    .keyboardShortcut("s", modifiers: .command)
             }
         }
         .padding(.horizontal, 16)
@@ -339,28 +320,48 @@ struct ToolButton: View {
     let tool: AnnotationToolType
     let isSelected: Bool
     let action: () -> Void
-    
+
+    @State private var isHovered = false
+
     var body: some View {
         Button(action: action) {
             Image(systemName: tool.icon)
                 .font(.system(size: 14))
                 .frame(width: 28, height: 28)
         }
-        .buttonStyle(ToolButtonStyle(isSelected: isSelected))
+        .buttonStyle(ToolButtonStyle(isSelected: isSelected, isHovered: isHovered))
+        .shadow(color: .black.opacity(isHovered && !isSelected ? 0.3 : 0), radius: isHovered ? 3 : 0, y: isHovered ? 1 : 0)
+        .scaleEffect(isHovered && !isSelected ? 1.1 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
         .help(tool.tooltip)
     }
 }
 
 struct ToolButtonStyle: ButtonStyle {
     let isSelected: Bool
-    
+    var isHovered: Bool = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor : (configuration.isPressed ? Color.gray.opacity(0.3) : Color.clear))
+                    .fill(backgroundColor(isPressed: configuration.isPressed))
             )
             .foregroundColor(isSelected ? .white : .primary)
+    }
+
+    private func backgroundColor(isPressed: Bool) -> Color {
+        if isSelected {
+            return Color.accentColor
+        } else if isPressed {
+            return Color.gray.opacity(0.3)
+        } else if isHovered {
+            return Color.gray.opacity(0.15)
+        }
+        return Color.clear
     }
 }
 
@@ -377,102 +378,198 @@ struct ToolbarButtonStyle: ButtonStyle {
     }
 }
 
+struct ActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14))
+            .frame(width: 28, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(configuration.isPressed ? Color.accentColor.opacity(0.8) : Color.accentColor)
+            )
+            .foregroundColor(.white)
+    }
+}
+
+struct HoverIconButton: View {
+    let icon: String
+    let tooltip: String
+    var isPrimary: Bool = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(backgroundColor)
+                )
+                .foregroundColor(isPrimary ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+        .shadow(color: .black.opacity(isHovered ? 0.3 : 0), radius: isHovered ? 3 : 0, y: isHovered ? 1 : 0)
+        .scaleEffect(isHovered ? 1.1 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .help(tooltip)
+    }
+
+    private var backgroundColor: Color {
+        if isPrimary {
+            return Color.accentColor
+        } else if isHovered {
+            return Color.gray.opacity(0.2)
+        }
+        return Color.clear
+    }
+}
+
+// MARK: - Color Swatch Button
+
+struct ColorSwatchButton: View {
+    let color: NSColor
+    let isSelected: Bool
+    let colorName: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Circle()
+            .fill(Color(color))
+            .frame(width: 22, height: 22)
+            .overlay(
+                // Selection ring
+                Circle()
+                    .stroke(Color.primary, lineWidth: isSelected ? 2 : 0)
+                    .frame(width: 26, height: 26)
+            )
+            .shadow(color: .black.opacity(isHovered ? 0.5 : 0), radius: isHovered ? 4 : 0, y: isHovered ? 2 : 0)
+            .scaleEffect(isHovered ? 1.15 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
+            .onTapGesture {
+                action()
+            }
+            .help(colorName)
+    }
+}
+
 // MARK: - Tool Options Bar
 
 struct ToolOptionsBar: View {
     @ObservedObject var state: AnnotationEditorState
-    
+
+    private let presetColors: [NSColor] = [
+        .systemRed, .systemOrange, .systemYellow, .systemGreen,
+        .systemBlue, .systemPurple, .black, .white
+    ]
+
+    private let strokeSizes: [CGFloat] = [1, 2, 3, 5, 8]
+    private let fontSizes: [CGFloat] = [12, 16, 24, 32, 48]
+
     var body: some View {
-        HStack(spacing: 20) {
-            // Color picker
-            HStack(spacing: 8) {
-                Text("Color:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                ColorPickerButton(selectedColor: state.currentColor) { color in
-                    state.setColor(color)
-                }
-                
-                // Recent colors
-                HStack(spacing: 4) {
-                    ForEach(Array(state.recentColors.enumerated()), id: \.offset) { _, color in
-                        ColorSwatch(color: color, isSelected: state.currentColor == color) {
+        HStack(spacing: 16) {
+            // Tool-specific options (not for select tool)
+            if state.currentToolType != .select {
+                // Color swatches with selection ring and hover effect
+                HStack(spacing: 6) {
+                    ForEach(presetColors, id: \.self) { color in
+                        ColorSwatchButton(
+                            color: color,
+                            isSelected: state.currentColor == color,
+                            colorName: colorName(for: color)
+                        ) {
                             state.setColor(color)
                         }
                     }
                 }
-            }
-            
-            Divider()
-                .frame(height: 20)
-            
-            // Stroke width (not for text or counter)
-            if ![.text, .counter].contains(state.currentToolType) {
-                HStack(spacing: 8) {
-                    Text("Stroke:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Slider(value: Binding(
-                        get: { state.strokeWidth },
+
+                Divider()
+                    .frame(height: 20)
+
+                // Stroke size dropdown (not for text or counter)
+                if ![.text, .counter].contains(state.currentToolType) {
+                    Picker("", selection: Binding(
+                        get: { closestStrokeSize(state.strokeWidth) },
                         set: { state.strokeWidth = $0 }
-                    ), in: 1...10, step: 1)
-                    .frame(width: 100)
-                    
-                    Text("\(Int(state.strokeWidth))px")
-                        .font(.caption)
-                        .frame(width: 30)
+                    )) {
+                        ForEach(strokeSizes, id: \.self) { size in
+                            Text("\(Int(size))px").tag(size)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 70)
                 }
-            }
-            
-            // Fill toggle (for shapes)
-            if [.rectangle, .ellipse].contains(state.currentToolType) {
-                Divider()
-                    .frame(height: 20)
-                
-                Toggle("Fill", isOn: Binding(
-                    get: { state.fillEnabled },
-                    set: { state.fillEnabled = $0 }
-                ))
-                .toggleStyle(.checkbox)
-                .font(.caption)
-            }
-            
-            // Font size (for text)
-            if state.currentToolType == .text {
-                Divider()
-                    .frame(height: 20)
-                
-                HStack(spacing: 8) {
-                    Text("Size:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Slider(value: Binding(
-                        get: { state.fontSize },
+
+                // Fill toggle (for shapes)
+                if [.rectangle, .ellipse].contains(state.currentToolType) {
+                    Toggle("Fill", isOn: Binding(
+                        get: { state.fillEnabled },
+                        set: { state.fillEnabled = $0 }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .font(.caption)
+                }
+
+                // Font size dropdown (for text)
+                if state.currentToolType == .text {
+                    Picker("", selection: Binding(
+                        get: { closestFontSize(state.fontSize) },
                         set: { state.fontSize = $0 }
-                    ), in: 10...48, step: 2)
-                    .frame(width: 100)
-                    
-                    Text("\(Int(state.fontSize))pt")
-                        .font(.caption)
-                        .frame(width: 30)
+                    )) {
+                        ForEach(fontSizes, id: \.self) { size in
+                            Text("\(Int(size))pt").tag(size)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 70)
                 }
             }
-            
+
             Spacer()
-            
-            // Keyboard shortcut hints
+
+            // Keyboard shortcut hints (always visible)
             Text(keyboardHint)
                 .font(.caption2)
                 .foregroundColor(.secondary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        .frame(height: 44)
         .background(Color(NSColor.windowBackgroundColor))
     }
-    
+
+    private func closestStrokeSize(_ value: CGFloat) -> CGFloat {
+        strokeSizes.min(by: { abs($0 - value) < abs($1 - value) }) ?? 3
+    }
+
+    private func closestFontSize(_ value: CGFloat) -> CGFloat {
+        fontSizes.min(by: { abs($0 - value) < abs($1 - value) }) ?? 16
+    }
+
+    private func colorName(for color: NSColor) -> String {
+        switch color {
+        case .systemRed: return "Red"
+        case .systemOrange: return "Orange"
+        case .systemYellow: return "Yellow"
+        case .systemGreen: return "Green"
+        case .systemBlue: return "Blue"
+        case .systemPurple: return "Purple"
+        case .black: return "Black"
+        case .white: return "White"
+        default: return "Color"
+        }
+    }
+
     private var keyboardHint: String {
         switch state.currentToolType {
         case .select:
