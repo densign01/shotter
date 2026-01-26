@@ -109,8 +109,18 @@ class OverlayWindow: NSPanel {
         // visibleFrame excludes dock and menu bar
         let visibleFrame = screen.visibleFrame
 
+        // Check dock orientation from system preferences.
+        // When dock is on left with auto-hide, visibleFrame.minX may be 0,
+        // but dock can reappear and cover the overlay. Always reserve space.
+        let dockOrientation = UserDefaults.standard.persistentDomain(forName: "com.apple.dock")?["orientation"] as? String ?? "bottom"
+        let dockOnLeft = dockOrientation == "left"
+        let dockReserve: CGFloat = 70  // Typical dock width
+
+        // When dock is on left, use dockReserve as total offset (no extra padding)
+        let xOffset = dockOnLeft ? max(visibleFrame.minX + padding, dockReserve) : visibleFrame.minX + padding
+
         let frame = NSRect(
-            x: visibleFrame.minX + padding,
+            x: xOffset,
             y: visibleFrame.minY + padding,
             width: overlayWidth,
             height: overlayHeight
