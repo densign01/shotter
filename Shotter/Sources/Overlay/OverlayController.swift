@@ -1,6 +1,15 @@
 import AppKit
 import SwiftUI
 
+private enum OverlayLayout {
+    static let overlayWidth: CGFloat = 280
+    static let overlayHeight: CGFloat = 180
+    static let actionButtonSize: CGFloat = 28
+    static let actionButtonSpacing: CGFloat = 8
+    static let actionBarInnerPadding: CGFloat = 6
+    static let actionBarOuterPadding: CGFloat = 8
+}
+
 class OverlayController {
     private var overlayWindow: OverlayWindow?
     private var dismissTimer: Timer?
@@ -82,7 +91,7 @@ class OverlayWindow: NSPanel {
         onAnnotate: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
-        // Calculate size based on image, capped at maxWidth
+        // Fixed size container keeps image + action bar together (CleanShot-style)
         guard NSScreen.main != nil else {
             super.init(
                 contentRect: .zero,
@@ -93,12 +102,9 @@ class OverlayWindow: NSPanel {
             return
         }
 
-        let maxWidth: CGFloat = 280
+        let overlayWidth = OverlayLayout.overlayWidth
+        let overlayHeight = OverlayLayout.overlayHeight
         let padding: CGFloat = 20
-        let imageSize = image.size
-        let aspectRatio = imageSize.height / imageSize.width
-        let overlayWidth = min(imageSize.width, maxWidth)
-        let overlayHeight = overlayWidth * aspectRatio
 
         let frame = NSRect(
             x: padding,
@@ -188,17 +194,19 @@ struct OverlayView: View {
     @State private var isHovering = false
 
     var body: some View {
-        let rounded = RoundedRectangle(cornerRadius: 10, style: .continuous)
-
-        // Image drives the size
+        // Image fills the fixed container (crops if needed), buttons anchor to image edges
         Image(nsImage: image)
             .resizable()
-            .aspectRatio(contentMode: .fit)
-            .clipShape(rounded)
-            .overlay(rounded.stroke(Color.white.opacity(0.2), lineWidth: 1))
+            .aspectRatio(contentMode: .fill)
+            .frame(width: OverlayLayout.overlayWidth, height: OverlayLayout.overlayHeight)
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            )
             .overlay(alignment: .topTrailing) {
                 // Floating action bar (top-right, inside image)
-                VStack(spacing: 8) {
+                VStack(spacing: OverlayLayout.actionButtonSpacing) {
                     OverlayActionButton(systemName: "doc.on.doc", action: onCopy)
                         .help("Copy")
                     OverlayActionButton(systemName: "folder", action: onSave, disabled: savedURL == nil)
@@ -206,10 +214,10 @@ struct OverlayView: View {
                     OverlayActionButton(systemName: "pencil.tip.crop.circle", action: onAnnotate)
                         .help("Annotate")
                 }
-                .padding(6)
+                .padding(OverlayLayout.actionBarInnerPadding)
                 .background(ActiveVisualEffectView(material: .hudWindow))
                 .cornerRadius(8)
-                .padding(8)
+                .padding(OverlayLayout.actionBarOuterPadding)
                 .opacity(isHovering ? 1 : 0.7)
             }
             .overlay(alignment: .topLeading) {
@@ -225,10 +233,9 @@ struct OverlayView: View {
                 .opacity(isHovering ? 1 : 0.6)
             }
             .shadow(radius: 8)
-            .frame(maxWidth: 280)
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) { isHovering = hovering }
-        }
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.15)) { isHovering = hovering }
+            }
     }
 }
 
@@ -241,7 +248,7 @@ struct OverlayActionButton: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .medium))
-                .frame(width: 28, height: 28)
+                .frame(width: OverlayLayout.actionButtonSize, height: OverlayLayout.actionButtonSize)
                 .foregroundColor(disabled ? .secondary : .primary)
         }
         .buttonStyle(.plain)
