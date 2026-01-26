@@ -33,3 +33,9 @@ Package.resolved
 *.swp
 *.lock
 *~
+
+# Claude continuity
+thoughts/
+
+# Build output
+dist/
