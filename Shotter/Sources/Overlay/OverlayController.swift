@@ -454,6 +454,14 @@ struct OverlayView: View {
                 .opacity(isHovering ? 1 : 0.6)
             }
             .shadow(radius: 8)
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    onPauseDismiss()
+                } else {
+                    onResumeDismiss()
+                }
+            }
     }
 }
 
