@@ -339,6 +339,7 @@ private final class OverlayDragSourceNSView: NSView, NSDraggingSource, NSFilePro
     var onDropComplete: ((Bool) -> Void)?
 
     private var isDraggingSession = false
+    private var currentPromiseFilename: String?
 
     init(
         image: NSImage,
@@ -361,6 +362,7 @@ private final class OverlayDragSourceNSView: NSView, NSDraggingSource, NSFilePro
 
     override func mouseDown(with event: NSEvent) {
         isDraggingSession = false
+        currentPromiseFilename = nil
         super.mouseDown(with: event)
     }
 
@@ -382,7 +384,7 @@ private final class OverlayDragSourceNSView: NSView, NSDraggingSource, NSFilePro
     }
 
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
-        savedURL?.lastPathComponent ?? FileNaming.generateFilename(extension: "png")
+        currentPromiseFilename ?? savedURL?.lastPathComponent ?? FileNaming.generateFilename(extension: "png")
     }
 
     func filePromiseProvider(
@@ -392,7 +394,7 @@ private final class OverlayDragSourceNSView: NSView, NSDraggingSource, NSFilePro
     ) {
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let filename = filePromiseProvider.suggestedName
+                let filename = self.currentPromiseFilename
                     ?? self.savedURL?.lastPathComponent
                     ?? FileNaming.generateFilename(extension: "png")
                 let destinationURL = url.appendingPathComponent(filename)
@@ -414,7 +416,7 @@ private final class OverlayDragSourceNSView: NSView, NSDraggingSource, NSFilePro
         onDragStart?()
 
         let provider = NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: self)
-        provider.suggestedName = savedURL?.lastPathComponent ?? FileNaming.generateFilename(extension: "png")
+        currentPromiseFilename = savedURL?.lastPathComponent ?? FileNaming.generateFilename(extension: "png")
 
         let draggingItem = NSDraggingItem(pasteboardWriter: provider)
         draggingItem.setDraggingFrame(bounds, contents: image)
