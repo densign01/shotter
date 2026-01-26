@@ -34,7 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon - menu bar only
         NSApp.setActivationPolicy(.accessory)
-        
+
         // Initialize components
         captureEngine = CaptureEngine()
         overlayController = OverlayController()
@@ -62,7 +62,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             await checkPermissions()
         }
     }
-    
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Menu bar app should keep running even when all windows are closed
+        return false
+    }
+
     private func captureFullscreen() {
         Task {
             guard let image = await captureEngine?.captureFullscreen() else {
