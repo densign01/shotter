@@ -6,6 +6,25 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.2.1</title>
+      <pubDate>Mon, 27 Jan 2026 10:00:00 -0500</pubDate>
+      <sparkle:version>121</sparkle:version>
+      <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New in 1.2.1</h2>
+        <ul>
+          <li><strong>Bug Fix:</strong> Fixed crash when using Copy/Save/Escape in annotation editor</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.2.1/Shotter-1.2.1.dmg"
+        length="2948164"
+        type="application/octet-stream"
+        sparkle:edSignature="fxOKKmkIeY1YhDKIly+c+d4IaXhgeRw6CGk0xX1KWYPKHiydDH9BJBxu1OP2Icf06NBjAsO+HvMyf0uYyaLLDA=="
+      />
+    </item>
+    <item>
       <title>Version 1.2.0</title>
       <pubDate>Mon, 27 Jan 2026 00:30:00 -0500</pubDate>
       <sparkle:version>120</sparkle:version>
