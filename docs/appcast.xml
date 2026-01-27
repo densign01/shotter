@@ -5,6 +5,26 @@
     <link>https://densign01.github.io/shotter/appcast.xml</link>
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
-    <!-- Items will be added by release script -->
+    <item>
+      <title>Version 1.1.0</title>
+      <pubDate>Mon, 27 Jan 2026 00:00:00 -0500</pubDate>
+      <sparkle:version>110</sparkle:version>
+      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New in 1.1.0</h2>
+        <ul>
+          <li><strong>Direct Copy:</strong> Hold Option while capturing to copy directly to clipboard (skips overlay)</li>
+          <li><strong>Overlay Position:</strong> Choose between bottom-left or bottom-right in Preferences</li>
+          <li><strong>Auto-Updates:</strong> Check for Updates from the menu bar</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.1.0/Shotter-1.1.0.dmg"
+        length="2964628"
+        type="application/octet-stream"
+        sparkle:edSignature="keFnIcsIWhsm8MJyJUcqp2IPBgqLPWOmsHdm4/yDuFnkGVRQK6o2RPC2G3akhVKC/VdAwyG0Z3Lt+wBjxqXJDA=="
+      />
+    </item>
   </channel>
 </rss>
