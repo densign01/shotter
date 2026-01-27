@@ -3,7 +3,9 @@ import SwiftUI
 
 /// NSView that handles the annotation canvas rendering and mouse events
 class AnnotationCanvasView: NSView {
-    var state: AnnotationEditorState?
+    // Weak reference to avoid retaining state after window closes.
+    // The window owns state; canvas should not extend its lifetime.
+    weak var state: AnnotationEditorState?
     private var trackingArea: NSTrackingArea?
 
     // Cached CIContext for blur operations (expensive to create)

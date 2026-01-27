@@ -20,30 +20,60 @@ class AnnotationEditorController {
         onComplete: @escaping (NSImage) -> Void,
         onCancel: @escaping () -> Void
     ) {
+        DebugLogger.log("openEditor called; savedURL=\(savedURL?.path ?? "nil")")
         // Close any existing editor
         closeEditor()
         
         // Create new editor window
-        editorWindow = AnnotationEditorWindow(
+        var window: AnnotationEditorWindow? = nil
+        window = AnnotationEditorWindow(
             image: image,
             savedURL: savedURL,
-            onSave: { [weak self] finalImage in
+            onSave: { finalImage in
+                DebugLogger.log("Annotation editor onSave callback")
                 onComplete(finalImage)
-                self?.editorWindow = nil
             },
-            onCancel: { [weak self] in
+            onCancel: {
+                DebugLogger.log("Annotation editor onCancel callback")
                 onCancel()
-                self?.editorWindow = nil
+            },
+            onClosed: { [weak self] in
+                DebugLogger.log("Annotation editor onClosed callback")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    guard let window else {
+                        DebugLogger.log("onClosed ran but window reference was nil")
+                        return
+                    }
+                    // Only clear if this is still the active editor window.
+                    if self.editorWindow === window {
+                        self.editorWindow = nil
+                        DebugLogger.log("Annotation editor window reference cleared after close")
+                    } else {
+                        DebugLogger.log("Skipped clearing editor window; a newer window is active")
+                    }
+                }
             }
         )
+
+        editorWindow = window
         
         editorWindow?.show()
     }
     
     /// Close the annotation editor if open
     func closeEditor() {
-        editorWindow?.close()
-        editorWindow = nil
+        DebugLogger.log("closeEditor called; hasWindow=\(editorWindow != nil)")
+        guard let window = editorWindow else { return }
+        window.close()
+        // Defer clearing to avoid releasing the window mid-close sequence.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if self.editorWindow === window {
+                self.editorWindow = nil
+                DebugLogger.log("Annotation editor window reference cleared after explicit close")
+            }
+        }
     }
     
     /// Check if the editor is currently open

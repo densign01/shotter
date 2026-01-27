@@ -4,20 +4,25 @@ import SwiftUI
 /// The main annotation editor window
 class AnnotationEditorWindow: NSWindow {
     private var state: AnnotationEditorState
-    private var canvasView: AnnotationCanvasView?
     private var onSave: ((NSImage) -> Void)?
     private var onCancel: (() -> Void)?
+    private var onClosed: (() -> Void)?
     private var savedURL: URL?
+    private var isProgrammaticClose = false
+    private var didInvokeCancel = false
+    private var closeRetain: AnnotationEditorWindow?
     
     init(
         image: NSImage,
         savedURL: URL?,
         onSave: @escaping (NSImage) -> Void,
-        onCancel: @escaping () -> Void
+        onCancel: @escaping () -> Void,
+        onClosed: @escaping () -> Void
     ) {
         self.state = AnnotationEditorState(image: image)
         self.onSave = onSave
         self.onCancel = onCancel
+        self.onClosed = onClosed
         self.savedURL = savedURL
         
         // Calculate window size based on image
@@ -64,8 +69,9 @@ class AnnotationEditorWindow: NSWindow {
         self.title = "Annotate Screenshot"
         self.minSize = NSSize(width: 500, height: 400)
         self.delegate = self
-        
+
         setupContent()
+        DebugLogger.log("Annotation editor window initialized; savedURL=\(savedURL?.path ?? "nil")")
     }
     
     private func setupContent() {
@@ -82,6 +88,7 @@ class AnnotationEditorWindow: NSWindow {
     }
     
     private func saveImage() {
+        DebugLogger.log("Save requested")
         guard let finalImage = state.renderFinalImage() else { return }
         
         if let url = savedURL {
@@ -103,6 +110,7 @@ class AnnotationEditorWindow: NSWindow {
     }
     
     private func saveToDisk(image: NSImage, url: URL, showInFinder: Bool = true) {
+        DebugLogger.log("Saving to disk at \(url.path); showInFinder=\(showInFinder)")
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
@@ -112,24 +120,28 @@ class AnnotationEditorWindow: NSWindow {
 
         do {
             try pngData.write(to: url)
+            DebugLogger.log("Write succeeded at \(url.path)")
             onSave?(image)
-            close()
+            closeProgrammatically()
 
             if showInFinder {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }
         } catch {
+            DebugLogger.log("Write failed at \(url.path): \(error.localizedDescription)")
             showAlert(title: "Save Failed", message: error.localizedDescription)
         }
     }
     
     private func copyToClipboard() {
+        DebugLogger.log("Copy requested")
         guard let finalImage = state.renderFinalImage() else { return }
 
         // Copy to clipboard
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects([finalImage])
+        DebugLogger.log("Copied to pasteboard")
 
         // Save to disk and close (silently, no Finder)
         if let url = savedURL {
@@ -156,6 +168,7 @@ class AnnotationEditorWindow: NSWindow {
     }
     
     private func cancelAndClose() {
+        DebugLogger.log("Cancel requested; annotationCount=\(state.annotations.count)")
         // Check if there are unsaved changes
         if !state.annotations.isEmpty {
             let alert = NSAlert()
@@ -167,13 +180,14 @@ class AnnotationEditorWindow: NSWindow {
             
             alert.beginSheetModal(for: self) { [weak self] response in
                 if response == .alertFirstButtonReturn {
-                    self?.onCancel?()
-                    self?.close()
+                    DebugLogger.log("Discard confirmed")
+                    self?.notifyCancelIfNeeded()
+                    self?.closeProgrammatically()
                 }
             }
         } else {
-            onCancel?()
-            close()
+            notifyCancelIfNeeded()
+            closeProgrammatically()
         }
     }
     
@@ -187,19 +201,93 @@ class AnnotationEditorWindow: NSWindow {
     }
     
     func show() {
+        DebugLogger.log("Showing annotation editor window")
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func closeProgrammatically() {
+        DebugLogger.log("Closing annotation editor programmatically")
+        isProgrammaticClose = true
+
+        // Hold a temporary strong reference to self so AppKit can finish its close sequence.
+        closeRetain = self
+
+        // Break delegate cycle before closing.
+        delegate = nil
+
+        // Nil out callbacks to break closure retain cycles.
+        onSave = nil
+        onCancel = nil
+        // Note: onClosed is called in windowWillClose, keep it for now
+
+        // Hide window immediately to prevent further interaction.
+        orderOut(nil)
+
+        // Release SwiftUI content to break observation chain.
+        contentView = nil
+        DebugLogger.log("Released SwiftUI contentView and callbacks")
+
+        // Wait several run loop turns for SwiftUI/Combine cleanup before close.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                DebugLogger.log("Calling close()")
+                self.close()
+
+                // Wait more turns before releasing self-retain.
+                DispatchQueue.main.async { [weak self] in
+                    DispatchQueue.main.async { [weak self] in
+                        DispatchQueue.main.async { [weak self] in
+                            self?.closeRetain = nil
+                            DebugLogger.log("Released temporary close retain")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func notifyCancelIfNeeded() {
+        guard !didInvokeCancel else { return }
+        didInvokeCancel = true
+        DebugLogger.log("Invoking onCancel callback")
+        onCancel?()
+    }
+
+    deinit {
+        DebugLogger.log("Annotation editor window deinitialized")
     }
 }
 
 extension AnnotationEditorWindow: NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        DebugLogger.log("windowShouldClose; isProgrammaticClose=\(isProgrammaticClose); annotationCount=\(state.annotations.count)")
+        if isProgrammaticClose {
+            return true
+        }
         if !state.annotations.isEmpty {
             cancelAndClose()
             return false
         }
-        onCancel?()
+        notifyCancelIfNeeded()
         return true
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        DebugLogger.log("windowWillClose")
+        onClosed?()
+        onClosed = nil
+    }
+}
+
+// MARK: - Key Event Handling
+
+extension AnnotationEditorWindow {
+    /// Handle Escape key explicitly to prevent default app termination behavior
+    override func cancelOperation(_ sender: Any?) {
+        cancelAndClose()
     }
 }
 

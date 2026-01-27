@@ -10,6 +10,7 @@ class MenuBarController: NSObject {
     private let onCaptureDisplay: (CaptureDisplay) -> Void
     private let onOpenSaveFolder: () -> Void
     private let onOpenPreferences: () -> Void
+    private let onQuit: () -> Void
     private let getDisplays: () async -> [CaptureDisplay]
     
     init(
@@ -19,6 +20,7 @@ class MenuBarController: NSObject {
         onCaptureDisplay: @escaping (CaptureDisplay) -> Void,
         onOpenSaveFolder: @escaping () -> Void,
         onOpenPreferences: @escaping () -> Void,
+        onQuit: @escaping () -> Void,
         getDisplays: @escaping () async -> [CaptureDisplay]
     ) {
         self.onCaptureFullscreen = onCaptureFullscreen
@@ -27,6 +29,7 @@ class MenuBarController: NSObject {
         self.onCaptureDisplay = onCaptureDisplay
         self.onOpenSaveFolder = onOpenSaveFolder
         self.onOpenPreferences = onOpenPreferences
+        self.onQuit = onQuit
         self.getDisplays = getDisplays
         
         super.init()
@@ -197,7 +200,7 @@ class MenuBarController: NSObject {
     }
 
     @objc private func quitClicked() {
-        NSApp.terminate(nil)
+        onQuit()
     }
 }
 

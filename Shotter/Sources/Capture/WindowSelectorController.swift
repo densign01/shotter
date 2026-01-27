@@ -120,7 +120,12 @@ class WindowSelectorOverlay: NSPanel {
             self.makeFirstResponder(view)
         }
     }
-    
+
+    /// Handle Escape key to cancel selection (prevents default app behavior)
+    override func cancelOperation(_ sender: Any?) {
+        selectorView?.cancelSelection()
+    }
+
     func updateHighlight(_ window: SCWindow?) {
         selectorView?.highlightedWindow = window
         selectorView?.needsDisplay = true
@@ -136,8 +141,12 @@ class WindowSelectorView: NSView {
     private let onCancel: () -> Void
     
     var highlightedWindow: SCWindow?
-    
+
     override var acceptsFirstResponder: Bool { true }
+
+    func cancelSelection() {
+        onCancel()
+    }
     
     init(
         frame: NSRect,

@@ -54,6 +54,7 @@ class AreaSelectorWindow {
     private var overlayWindows: [AreaOverlayWindow] = []
     private var completion: ((AreaSelectorResult) -> Void)?
     private var coordinator: AreaSelectionCoordinator?
+    private var hasCompleted = false
     
     init(completion: @escaping (AreaSelectorResult) -> Void) {
         self.completion = completion
@@ -88,8 +89,10 @@ class AreaSelectorWindow {
             window.show()
         }
     }
-    
+
     private func handleAreaComplete(_ rect: CGRect, screen: NSScreen) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
         NSCursor.pop()
         for window in overlayWindows {
             window.orderOut(nil)
@@ -97,8 +100,10 @@ class AreaSelectorWindow {
         completion?(.area(rect, screen))
         completion = nil
     }
-    
+
     private func handleWindowSelected(_ window: SCWindow) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
         NSCursor.pop()
         for window in overlayWindows {
             window.orderOut(nil)
@@ -106,8 +111,10 @@ class AreaSelectorWindow {
         completion?(.window(window))
         completion = nil
     }
-    
+
     private func handleCancel() {
+        guard !hasCompleted else { return }
+        hasCompleted = true
         NSCursor.pop()
         for window in overlayWindows {
             window.orderOut(nil)
@@ -356,6 +363,11 @@ class AreaOverlayWindow: NSPanel {
         if let view = selectionView {
             self.makeFirstResponder(view)
         }
+    }
+
+    /// Handle Escape key to cancel selection (prevents default app behavior)
+    override func cancelOperation(_ sender: Any?) {
+        coordinator?.cancel()
     }
 }
 

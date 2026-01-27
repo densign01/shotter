@@ -38,6 +38,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var preferencesWindow: NSWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        DebugLogger.installSignalHandlers()
+        DebugLogger.log("Application did finish launching")
+
         // Hide dock icon - menu bar only
         NSApp.setActivationPolicy(.accessory)
 
@@ -52,6 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onCaptureDisplay: { [weak self] display in self?.captureDisplay(display) },
             onOpenSaveFolder: { self.openSaveFolder() },
             onOpenPreferences: { self.openPreferences() },
+            onQuit: { [weak self] in self?.requestQuit() },
             getDisplays: { [weak self] in
                 await self?.captureEngine?.getAvailableDisplays() ?? []
             }
@@ -72,6 +76,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Menu bar app should keep running even when all windows are closed
         return false
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Allow all termination requests (Cmd+Q, menu Quit, system shutdown).
+        // The cancelOperation overrides in capture/annotation windows prevent
+        // Escape from triggering app termination.
+        DebugLogger.log("Allowing termination")
+        return .terminateNow
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        DebugLogger.log("Application will terminate")
     }
 
     private func captureFullscreen(directCopy: Bool = false) {
@@ -157,6 +173,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         NSWorkspace.shared.activateFileViewerSelecting([savedURL])
                     },
                     onAnnotate: {
+                        DebugLogger.log("Overlay annotate clicked (savedURL available)")
                         self.overlayController?.dismissOverlay()
                         self.openAnnotationEditor(image: image, savedURL: savedURL)
                     },
@@ -177,6 +194,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         // Can't show in Finder since save failed
                     },
                     onAnnotate: {
+                        DebugLogger.log("Overlay annotate clicked (no savedURL)")
                         self.overlayController?.dismissOverlay()
                         self.openAnnotationEditor(image: image, savedURL: nil)
                     },
@@ -286,16 +304,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         preferencesWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    private func requestQuit() {
+        DebugLogger.log("User requested quit")
+        NSApp.terminate(nil)
+    }
     
     private func openAnnotationEditor(image: NSImage, savedURL: URL?) {
+        DebugLogger.log("Opening annotation editor; savedURL=\(savedURL?.path ?? "nil")")
         AnnotationEditorController.shared.openEditor(
             image: image,
             savedURL: savedURL,
             onComplete: { _ in
                 // Annotation complete - image was saved
+                DebugLogger.log("Annotation editor completed")
             },
             onCancel: {
                 // Annotation cancelled
+                DebugLogger.log("Annotation editor cancelled")
             }
         )
     }
