@@ -155,13 +155,15 @@ class AnnotationEditorWindow: NSWindow {
             return
         }
 
-        // Save to disk first (so we have a valid file URL for terminal apps)
+        // Try to save to disk (so we have a valid file URL for terminal apps)
+        var savedFileURL: URL? = nil
         do {
             try pngData.write(to: targetURL)
+            savedFileURL = targetURL
             DebugLogger.log("Saved to \(targetURL.path) for clipboard")
         } catch {
             DebugLogger.log("Failed to save for clipboard: \(error.localizedDescription)")
-            return
+            // Continue anyway - we'll copy without the file URL
         }
 
         // Copy to pasteboard with formats optimized for terminal apps (Ghostty, etc.)
@@ -169,20 +171,24 @@ class AnnotationEditorWindow: NSWindow {
         pasteboard.clearContents()
 
         // Declare types (order matters - most preferred first)
-        pasteboard.declareTypes([.fileURL, .png, .tiff], owner: nil)
+        var types: [NSPasteboard.PasteboardType] = [.png, .tiff]
+        if savedFileURL != nil {
+            types.insert(.fileURL, at: 0)
+        }
+        pasteboard.declareTypes(types, owner: nil)
 
-        // Write file URL (enables terminal apps like Ghostty to display images inline)
-        pasteboard.setString(targetURL.absoluteString, forType: .fileURL)
+        // Write file URL if available (enables terminal apps like Ghostty)
+        if let fileURL = savedFileURL {
+            pasteboard.setString(fileURL.absoluteString, forType: .fileURL)
+        }
 
         // Write PNG data explicitly (preferred by most apps)
         pasteboard.setData(pngData, forType: .png)
 
         // Write TIFF data for apps that prefer it
-        if let tiffData = finalImage.tiffRepresentation {
-            pasteboard.setData(tiffData, forType: .tiff)
-        }
+        pasteboard.setData(tiffData, forType: .tiff)
 
-        DebugLogger.log("Copied to pasteboard with file URL: \(targetURL.path)")
+        DebugLogger.log("Copied to pasteboard\(savedFileURL != nil ? " with file URL: \(savedFileURL!.path)" : " (no file URL)")")
 
         // Close the editor
         onSave?(finalImage)
