@@ -143,15 +143,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             SoundManager.shared.playCaptureSound()
         }
 
+        // Save to file first (so we have a URL for clipboard)
+        let result = saveImage(image)
+        let savedURL = try? result.get()
+
         // Auto-copy to clipboard if enabled (must be on main thread for NSPasteboard)
+        // Now includes file URL for terminal compatibility (Ghostty, etc.)
         if prefs.autoCopyToClipboard || shouldDirectCopy {
             DispatchQueue.main.async {
-                self.copyToClipboard(image)
+                self.copyToClipboard(image, fileURL: savedURL)
             }
         }
-
-        // Save to file
-        let result = saveImage(image)
 
         // Direct-copy mode: skip overlay entirely
         if shouldDirectCopy {
@@ -167,7 +169,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     image: image,
                     savedURL: savedURL,
                     onCopy: {
-                        self.copyToClipboard(image)
+                        self.copyToClipboard(image, fileURL: savedURL)
                     },
                     onSave: {
                         NSWorkspace.shared.activateFileViewerSelecting([savedURL])
@@ -184,11 +186,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .failure(let error):
                 self.showSaveErrorAlert(error: error)
                 // Still show overlay but without save functionality
+                // No file URL available for clipboard in this case
                 self.overlayController?.showOverlay(
                     image: image,
                     savedURL: nil,
                     onCopy: {
-                        self.copyToClipboard(image)
+                        self.copyToClipboard(image, fileURL: nil)
                     },
                     onSave: {
                         // Can't show in Finder since save failed
@@ -268,10 +271,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func copyToClipboard(_ image: NSImage) {
+    /// Copies an image to the clipboard with formats optimized for terminal apps (Ghostty, etc.)
+    /// - Parameters:
+    ///   - image: The image to copy
+    ///   - fileURL: Optional file URL - when provided, terminals can display the image inline
+    private func copyToClipboard(_ image: NSImage, fileURL: URL? = nil) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([image])
+
+        // Declare types we'll provide (order matters - most preferred first)
+        var types: [NSPasteboard.PasteboardType] = [.png, .tiff]
+        if fileURL != nil {
+            types.insert(.fileURL, at: 0)
+        }
+        pasteboard.declareTypes(types, owner: nil)
+
+        // Write file URL first (enables terminal apps like Ghostty to display images inline)
+        if let fileURL = fileURL {
+            pasteboard.setString(fileURL.absoluteString, forType: .fileURL)
+        }
+
+        // Write PNG data explicitly (preferred by most apps)
+        if let tiffData = image.tiffRepresentation,
+           let bitmap = NSBitmapImageRep(data: tiffData),
+           let pngData = bitmap.representation(using: .png, properties: [:]) {
+            pasteboard.setData(pngData, forType: .png)
+        }
+
+        // Write TIFF data for apps that prefer it
+        if let tiffData = image.tiffRepresentation {
+            pasteboard.setData(tiffData, forType: .tiff)
+        }
     }
 
     private func moveToTrash(_ fileURL: URL) {

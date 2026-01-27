@@ -137,22 +137,56 @@ class AnnotationEditorWindow: NSWindow {
         DebugLogger.log("Copy requested")
         guard let finalImage = state.renderFinalImage() else { return }
 
-        // Copy to clipboard
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.writeObjects([finalImage])
-        DebugLogger.log("Copied to pasteboard")
-
-        // Save to disk and close (silently, no Finder)
+        // Determine target file URL (use existing or generate new)
+        let targetURL: URL
         if let url = savedURL {
-            saveToDisk(image: finalImage, url: url, showInFinder: false)
+            targetURL = url
         } else {
-            // Generate default save location, ensuring directory exists
             let saveDir = PreferencesManager.shared.saveLocation
             try? FileManager.default.createDirectory(at: saveDir, withIntermediateDirectories: true)
-            let url = saveDir.appendingPathComponent(FileNaming.generateFilename())
-            saveToDisk(image: finalImage, url: url, showInFinder: false)
+            targetURL = saveDir.appendingPathComponent(FileNaming.generateFilename())
         }
+
+        // Convert image to PNG data
+        guard let tiffData = finalImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            DebugLogger.log("Failed to convert image to PNG for clipboard")
+            return
+        }
+
+        // Save to disk first (so we have a valid file URL for terminal apps)
+        do {
+            try pngData.write(to: targetURL)
+            DebugLogger.log("Saved to \(targetURL.path) for clipboard")
+        } catch {
+            DebugLogger.log("Failed to save for clipboard: \(error.localizedDescription)")
+            return
+        }
+
+        // Copy to pasteboard with formats optimized for terminal apps (Ghostty, etc.)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+
+        // Declare types (order matters - most preferred first)
+        pasteboard.declareTypes([.fileURL, .png, .tiff], owner: nil)
+
+        // Write file URL (enables terminal apps like Ghostty to display images inline)
+        pasteboard.setString(targetURL.absoluteString, forType: .fileURL)
+
+        // Write PNG data explicitly (preferred by most apps)
+        pasteboard.setData(pngData, forType: .png)
+
+        // Write TIFF data for apps that prefer it
+        if let tiffData = finalImage.tiffRepresentation {
+            pasteboard.setData(tiffData, forType: .tiff)
+        }
+
+        DebugLogger.log("Copied to pasteboard with file URL: \(targetURL.path)")
+
+        // Close the editor
+        onSave?(finalImage)
+        closeProgrammatically()
     }
     
     private func flashWindow() {

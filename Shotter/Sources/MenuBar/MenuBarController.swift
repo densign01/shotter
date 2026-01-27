@@ -181,10 +181,10 @@ class MenuBarController: NSObject {
     }
 
     @objc private func aboutClicked() {
-        let fullVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        let version = fullVersion.split(separator: ".").prefix(2).joined(separator: ".")
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
         let alert = NSAlert()
-        alert.messageText = "Shotter v\(version)"
+        alert.messageText = "Shotter v\(version) (\(build))"
         alert.informativeText = "© 2026 Daniel Ensign\n\ngithub.com/densign01/shotter"
         alert.alertStyle = .informational
         alert.icon = NSApp.applicationIconImage
