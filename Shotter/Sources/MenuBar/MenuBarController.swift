@@ -180,6 +180,9 @@ class MenuBarController: NSObject {
         UpdaterController.shared.checkForUpdates()
     }
 
+    // For test builds, add build identifier to informativeText:
+    // let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+    // "\n\nBuild: \(buildNumber) (workspace-name)"
     @objc private func aboutClicked() {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
