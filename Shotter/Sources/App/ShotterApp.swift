@@ -14,6 +14,12 @@ struct ShotterApp: App {
             PreferencesView()
         }
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates...") {
+                    UpdaterController.shared.checkForUpdates()
+                }
+                .disabled(!UpdaterController.shared.canCheckForUpdates)
+            }
             CommandGroup(replacing: .appSettings) {
                 Button("Preferences...") {
                     NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)

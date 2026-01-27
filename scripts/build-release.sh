@@ -27,9 +27,17 @@ swift build -c release
 echo "Creating app bundle..."
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
+mkdir -p "$APP_BUNDLE/Contents/Frameworks"
 
 # Copy binary
 cp ".build/release/Shotter" "$APP_BUNDLE/Contents/MacOS/"
+
+# Copy Sparkle framework for auto-updates
+echo "Embedding Sparkle framework..."
+cp -R ".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" "$APP_BUNDLE/Contents/Frameworks/"
+
+# Add rpath so binary can find the framework
+install_name_tool -add_rpath @executable_path/../Frameworks "$APP_BUNDLE/Contents/MacOS/Shotter"
 
 # Create Info.plist with version
 cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
@@ -65,6 +73,10 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <true/>
     <key>NSScreenCaptureUsageDescription</key>
     <string>Shotter needs screen recording permission to capture screenshots.</string>
+    <key>SUPublicEDKey</key>
+    <string>M+On/oL59nfxP2F6oOWOpKGnrMItAgE1JY5sQxvP8gE=</string>
+    <key>SUFeedURL</key>
+    <string>https://densign01.github.io/shotter/appcast.xml</string>
 </dict>
 </plist>
 EOF
