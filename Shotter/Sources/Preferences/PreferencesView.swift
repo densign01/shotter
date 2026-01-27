@@ -132,7 +132,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 420)
+        .frame(width: 480, height: 480)
     }
     
     private func chooseSaveLocation() {

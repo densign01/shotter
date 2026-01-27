@@ -121,6 +121,15 @@ class MenuBarController: NSObject {
         updateItem.target = self
         menu.addItem(updateItem)
 
+        // About
+        let aboutItem = NSMenuItem(
+            title: "About Shotter",
+            action: #selector(aboutClicked),
+            keyEquivalent: ""
+        )
+        aboutItem.target = self
+        menu.addItem(aboutItem)
+
         menu.addItem(NSMenuItem.separator())
         
         // Quit
@@ -166,6 +175,25 @@ class MenuBarController: NSObject {
 
     @objc private func checkForUpdatesClicked() {
         UpdaterController.shared.checkForUpdates()
+    }
+
+    @objc private func aboutClicked() {
+        let fullVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let version = fullVersion.split(separator: ".").prefix(2).joined(separator: ".")
+        let alert = NSAlert()
+        alert.messageText = "Shotter v\(version)"
+        alert.informativeText = "© 2026 Daniel Ensign\n\ngithub.com/densign01/shotter"
+        alert.alertStyle = .informational
+        alert.icon = NSApp.applicationIconImage
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Open GitHub")
+
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
+            if let url = URL(string: "https://github.com/densign01/shotter") {
+                NSWorkspace.shared.open(url)
+            }
+        }
     }
 
     @objc private func quitClicked() {
