@@ -4,11 +4,17 @@ All notable changes to Shotter will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [1.3.0] - 2026-01-27
+
+### Added
+
+- Clipboard now includes file URL for terminal app compatibility (Ghostty, iTerm2, etc.)
+- Build number shown in About dialog for easier debugging
 
 ### Fixed
 
 - Screenshot overlay no longer shows square corners at edges (proper layer masking)
+- Clipboard copy now works even when save to disk fails (graceful fallback)
 - Arrow and line annotations now move correctly when dragged (previously only selection box moved)
 - Window capture uses correct display scale factor on multi-monitor setups
 - Hotkeys automatically recover when system disables event tap due to timeout
@@ -20,3 +26,4 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Cached CIContext for blur rendering (performance improvement with multiple blur regions)
 - Arrows and lines no longer show resize handles (only support moving, not resizing)
+- Screenshot save now happens before clipboard copy (ensures file URL is available)

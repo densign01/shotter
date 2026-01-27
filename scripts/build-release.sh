@@ -87,6 +87,10 @@ if [ -d "$PROJECT_DIR/Shotter/Resources" ]; then
     find "$PROJECT_DIR/Shotter/Resources" -type f ! -name "Info.plist" ! -name "*.entitlements" -exec cp {} "$APP_BUNDLE/Contents/Resources/" \; 2>/dev/null || true
 fi
 
+# Strip extended attributes (provenance, resource forks) that break codesign
+echo "Stripping extended attributes..."
+xattr -cr "$APP_BUNDLE"
+
 # Sign with hardened runtime
 echo "Signing with hardened runtime..."
 codesign --force --deep --sign "$SIGNING_IDENTITY" \
