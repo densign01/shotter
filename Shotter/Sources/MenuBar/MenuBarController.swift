@@ -184,9 +184,10 @@ class MenuBarController: NSObject {
     // let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
     // "\n\nBuild: \(buildNumber) (workspace-name)"
     @objc private func aboutClicked() {
-        let fullVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
         let alert = NSAlert()
-        alert.messageText = "Shotter v\(fullVersion)"
+        alert.messageText = "Shotter v\(version) (\(build))"
         alert.informativeText = "© 2026 Daniel Ensign\n\ngithub.com/densign01/shotter"
         alert.alertStyle = .informational
         alert.icon = NSApp.applicationIconImage
