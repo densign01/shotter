@@ -8,6 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Screenshot overlay no longer shows square corners at edges (proper layer masking)
 - Arrow and line annotations now move correctly when dragged (previously only selection box moved)
 - Window capture uses correct display scale factor on multi-monitor setups
 - Hotkeys automatically recover when system disables event tap due to timeout

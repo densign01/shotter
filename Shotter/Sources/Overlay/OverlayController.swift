@@ -196,7 +196,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
         self.level = .floating
         self.isOpaque = false
         self.backgroundColor = .clear
-        self.hasShadow = true
+        self.hasShadow = false
         self.isMovableByWindowBackground = false
         self.hidesOnDeactivate = false
         self.ignoresMouseEvents = false
@@ -219,6 +219,8 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
         hostingView = NSHostingView(rootView: overlayView)
         hostingView?.wantsLayer = true
         hostingView?.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView?.layer?.cornerRadius = 10
+        hostingView?.layer?.masksToBounds = true
         hostingView?.frame = NSRect(x: 0, y: 0, width: overlayWidth, height: overlayHeight)
         self.contentView = hostingView
     }
@@ -420,56 +422,58 @@ struct OverlayView: View {
 
     var body: some View {
         // Image fills the fixed container (crops if needed), buttons anchor to image edges
-        Image(nsImage: image)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: OverlayLayout.overlayWidth, height: OverlayLayout.overlayHeight)
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
-            )
-            .allowsHitTesting(false)
-            .frame(width: OverlayLayout.overlayWidth, height: OverlayLayout.overlayHeight)
-            .overlay(alignment: .topTrailing) {
-                // Floating action bar (top-right, inside image)
-                VStack(spacing: OverlayLayout.actionButtonSpacing) {
-                    OverlayActionButton(systemName: "doc.on.doc", action: onCopy)
-                        .help("Copy")
-                    OverlayActionButton(systemName: "folder", action: onSave)
-                        .help("Show in Finder")
-                    OverlayActionButton(systemName: "pencil.tip.crop.circle", action: onAnnotate)
-                        .help("Annotate")
-                    OverlayDeleteButton(action: onDelete)
-                        .help("Move to Trash")
-                }
-                .padding(OverlayLayout.actionBarInnerPadding)
-                .background(ActiveVisualEffectView(material: .hudWindow))
-                .cornerRadius(8)
-                .padding(OverlayLayout.actionBarOuterPadding)
-                .opacity(isHovering ? 1 : 0.7)
+        ZStack {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: OverlayLayout.overlayWidth, height: OverlayLayout.overlayHeight)
+                .allowsHitTesting(false)
+        }
+        .frame(width: OverlayLayout.overlayWidth, height: OverlayLayout.overlayHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .overlay(alignment: .topTrailing) {
+            // Floating action bar (top-right, inside image)
+            VStack(spacing: OverlayLayout.actionButtonSpacing) {
+                OverlayActionButton(systemName: "doc.on.doc", action: onCopy)
+                    .help("Copy")
+                OverlayActionButton(systemName: "folder", action: onSave)
+                    .help("Show in Finder")
+                OverlayActionButton(systemName: "pencil.tip.crop.circle", action: onAnnotate)
+                    .help("Annotate")
+                OverlayDeleteButton(action: onDelete)
+                    .help("Move to Trash")
             }
-            .overlay(alignment: .topLeading) {
-                // Close button (top-left corner, inside image)
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .background(Circle().fill(Color.black.opacity(0.5)))
-                }
-                .buttonStyle(.plain)
-                .padding(10)
-                .opacity(isHovering ? 1 : 0.6)
+            .padding(OverlayLayout.actionBarInnerPadding)
+            .background(ActiveVisualEffectView(material: .hudWindow))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(OverlayLayout.actionBarOuterPadding)
+            .opacity(isHovering ? 1 : 0.7)
+        }
+        .overlay(alignment: .topLeading) {
+            // Close button (top-left corner, inside image)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .background(Circle().fill(Color.black.opacity(0.5)))
             }
-            .shadow(radius: 8)
-            .onHover { hovering in
-                isHovering = hovering
-                if hovering {
-                    onPauseDismiss()
-                } else {
-                    onResumeDismiss()
-                }
+            .buttonStyle(.plain)
+            .padding(10)
+            .opacity(isHovering ? 1 : 0.6)
+        }
+        .shadow(radius: 8)
+        .onHover { hovering in
+            isHovering = hovering
+            if hovering {
+                onPauseDismiss()
+            } else {
+                onResumeDismiss()
             }
+        }
     }
 }
 
