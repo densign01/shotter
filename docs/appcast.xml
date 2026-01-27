@@ -6,13 +6,33 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.2.0</title>
+      <pubDate>Mon, 27 Jan 2026 00:30:00 -0500</pubDate>
+      <sparkle:version>120</sparkle:version>
+      <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New in 1.2</h2>
+        <ul>
+          <li><strong>About Dialog:</strong> New About menu with version info and GitHub link</li>
+          <li><strong>UI Polish:</strong> Taller preferences window for better spacing</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.2.0/Shotter-1.2.0.dmg"
+        length="2951494"
+        type="application/octet-stream"
+        sparkle:edSignature="Bg4XZZ2QBYjesmCNkQ4adDsJOC+2tGoXkS/npTb5wdO3OXrNHPdoTf8m4IRN+E2iZ58RtsaUAmGw+t3u8uADCg=="
+      />
+    </item>
+    <item>
       <title>Version 1.1.0</title>
       <pubDate>Mon, 27 Jan 2026 00:00:00 -0500</pubDate>
       <sparkle:version>110</sparkle:version>
       <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
-        <h2>What's New in 1.1.0</h2>
+        <h2>What's New in 1.1</h2>
         <ul>
           <li><strong>Direct Copy:</strong> Hold Option while capturing to copy directly to clipboard (skips overlay)</li>
           <li><strong>Overlay Position:</strong> Choose between bottom-left or bottom-right in Preferences</li>
