@@ -111,7 +111,16 @@ class MenuBarController: NSObject {
         prefsItem.keyEquivalentModifierMask = [.command]
         prefsItem.target = self
         menu.addItem(prefsItem)
-        
+
+        // Check for Updates
+        let updateItem = NSMenuItem(
+            title: "Check for Updates...",
+            action: #selector(checkForUpdatesClicked),
+            keyEquivalent: ""
+        )
+        updateItem.target = self
+        menu.addItem(updateItem)
+
         menu.addItem(NSMenuItem.separator())
         
         // Quit
@@ -154,7 +163,11 @@ class MenuBarController: NSObject {
     @objc private func openPreferencesClicked() {
         onOpenPreferences()
     }
-    
+
+    @objc private func checkForUpdatesClicked() {
+        UpdaterController.shared.checkForUpdates()
+    }
+
     @objc private func quitClicked() {
         NSApp.terminate(nil)
     }

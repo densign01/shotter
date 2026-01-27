@@ -46,18 +46,23 @@ echo "Credentials OK"
 echo ""
 
 # Step 1: Build and sign
-echo "Step 1/3: Building and signing..."
+echo "Step 1/4: Building and signing..."
 "$SCRIPT_DIR/build-release.sh" "$VERSION"
 echo ""
 
 # Step 2: Notarize app
-echo "Step 2/3: Notarizing app..."
+echo "Step 2/4: Notarizing app..."
 "$SCRIPT_DIR/notarize.sh"
 echo ""
 
 # Step 3: Create DMG
-echo "Step 3/3: Creating DMG..."
+echo "Step 3/4: Creating DMG..."
 "$SCRIPT_DIR/create-dmg.sh" "$VERSION"
+echo ""
+
+# Step 4: Update appcast for Sparkle auto-updates
+echo "Step 4/4: Updating appcast.xml..."
+"$SCRIPT_DIR/update-appcast.sh" "$VERSION"
 echo ""
 
 echo "============================================"
@@ -67,7 +72,9 @@ echo ""
 echo "Output: $PROJECT_DIR/dist/Shotter-$VERSION.dmg"
 echo ""
 echo "To publish to GitHub:"
+echo "  git add docs/appcast.xml"
+echo "  git commit -m \"Update appcast for v$VERSION\""
 echo "  git tag v$VERSION"
-echo "  git push origin v$VERSION"
+echo "  git push origin main v$VERSION"
 echo "  gh release create v$VERSION dist/Shotter-$VERSION.dmg --title \"Shotter v$VERSION\""
 echo ""

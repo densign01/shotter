@@ -28,5 +28,9 @@
 	<string>Copyright © 2025. All rights reserved.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUPublicEDKey</key>
+	<string>M+On/oL59nfxP2F6oOWOpKGnrMItAgE1JY5sQxvP8gE=</string>
+	<key>SUFeedURL</key>
+	<string>https://densign01.github.io/shotter/appcast.xml</string>
 </dict>
 </plist>
