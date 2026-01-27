@@ -23,8 +23,8 @@ if [ ! -f "$DMG_PATH" ]; then
     exit 1
 fi
 
-# Get DMG size
-DMG_SIZE=$(stat -f%z "$DMG_PATH")
+# Get DMG size (works on both macOS and Linux)
+DMG_SIZE=$(wc -c < "$DMG_PATH" | tr -d ' ')
 
 # Get EdDSA signature using Sparkle's sign_update tool
 echo "Signing DMG with EdDSA..."
