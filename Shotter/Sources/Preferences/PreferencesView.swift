@@ -52,6 +52,8 @@ struct PreferencesView: View {
 
                 Toggle("Auto-copy to clipboard", isOn: $prefs.autoCopyToClipboard)
 
+                Toggle("Save screenshots automatically", isOn: $prefs.autoSaveScreenshots)
+
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
                 Text("General")

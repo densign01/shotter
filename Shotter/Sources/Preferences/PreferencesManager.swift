@@ -90,6 +90,7 @@ class PreferencesManager: ObservableObject {
         static let launchAtLogin = "launchAtLogin"
         static let playCaptureSound = "playCaptureSound"
         static let autoCopyToClipboard = "autoCopyToClipboard"
+        static let autoSaveScreenshots = "autoSaveScreenshots"
         static let shortcutFullscreen = "shortcutFullscreen"
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
@@ -124,6 +125,14 @@ class PreferencesManager: ObservableObject {
     @Published var autoCopyToClipboard: Bool {
         didSet {
             defaults.set(autoCopyToClipboard, forKey: Keys.autoCopyToClipboard)
+        }
+    }
+
+    /// When enabled, screenshots are saved to disk immediately after capture.
+    /// When disabled, screenshots are held in memory until user manually saves.
+    @Published var autoSaveScreenshots: Bool {
+        didSet {
+            defaults.set(autoSaveScreenshots, forKey: Keys.autoSaveScreenshots)
         }
     }
 
@@ -201,6 +210,13 @@ class PreferencesManager: ObservableObject {
 
         // Load auto-copy preference (default to false)
         autoCopyToClipboard = defaults.bool(forKey: Keys.autoCopyToClipboard)
+
+        // Load auto-save preference (default to true for backwards compatibility)
+        if defaults.object(forKey: Keys.autoSaveScreenshots) == nil {
+            autoSaveScreenshots = true
+        } else {
+            autoSaveScreenshots = defaults.bool(forKey: Keys.autoSaveScreenshots)
+        }
 
         // Load shortcuts
         shortcutFullscreen = Self.loadShortcut(from: defaults, forKey: Keys.shortcutFullscreen, default: .defaultFullscreen)

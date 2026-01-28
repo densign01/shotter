@@ -207,6 +207,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
         // Create SwiftUI view
         let overlayView = OverlayView(
             image: image,
+            hasSavedFile: savedURL != nil,
             onCopy: onCopy,
             onSave: onSave,
             onAnnotate: onAnnotate,
@@ -410,6 +411,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
 
 struct OverlayView: View {
     let image: NSImage
+    let hasSavedFile: Bool
     let onCopy: () -> Void
     let onSave: () -> Void
     let onAnnotate: () -> Void
@@ -440,12 +442,17 @@ struct OverlayView: View {
             VStack(spacing: OverlayLayout.actionButtonSpacing) {
                 OverlayActionButton(systemName: "doc.on.doc", action: onCopy)
                     .help("Copy")
-                OverlayActionButton(systemName: "folder", action: onSave)
-                    .help("Show in Finder")
+                // Show "Save" when no file exists, "Show in Finder" when file exists
+                OverlayActionButton(
+                    systemName: hasSavedFile ? "folder" : "square.and.arrow.down",
+                    action: onSave
+                )
+                .help(hasSavedFile ? "Show in Finder" : "Save")
                 OverlayActionButton(systemName: "pencil.tip.crop.circle", action: onAnnotate)
                     .help("Annotate")
+                // Show "Discard" when no file exists, "Move to Trash" when file exists
                 OverlayDeleteButton(action: onDelete)
-                    .help("Move to Trash")
+                    .help(hasSavedFile ? "Move to Trash" : "Discard")
             }
             .padding(OverlayLayout.actionBarInnerPadding)
             .background(ActiveVisualEffectView(material: .hudWindow))
@@ -541,6 +548,7 @@ struct ActiveVisualEffectView: NSViewRepresentable {
 #Preview {
     OverlayView(
         image: NSImage(systemSymbolName: "photo", accessibilityDescription: nil)!,
+        hasSavedFile: true,
         onCopy: {},
         onSave: {},
         onAnnotate: {},
