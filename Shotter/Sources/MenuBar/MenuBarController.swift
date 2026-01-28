@@ -188,7 +188,7 @@ class MenuBarController: NSObject {
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
         let alert = NSAlert()
         alert.messageText = "Shotter v\(version) (\(build))"
-        alert.informativeText = "© 2026 Daniel Ensign\n\ngithub.com/densign01/shotter"
+        alert.informativeText = "© 2026 Daniel Ensign"
         alert.alertStyle = .informational
         alert.icon = NSApp.applicationIconImage
         alert.addButton(withTitle: "OK")
