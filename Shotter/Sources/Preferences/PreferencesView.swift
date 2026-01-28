@@ -50,7 +50,14 @@ struct PreferencesView: View {
 
                 Toggle("Play capture sound", isOn: $prefs.playCaptureSound)
 
-                Toggle("Auto-copy to clipboard", isOn: $prefs.autoCopyToClipboard)
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Auto-copy to clipboard", isOn: $prefs.autoCopyToClipboard)
+                    if !prefs.autoCopyToClipboard {
+                        Text("Hold ⌥ Option with your shortcut to copy")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
 
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
