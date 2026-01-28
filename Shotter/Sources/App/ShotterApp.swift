@@ -143,9 +143,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             SoundManager.shared.playCaptureSound()
         }
 
-        // Save to file first (so we have a URL for clipboard)
-        let result = saveImage(image)
-        let savedURL = try? result.get()
+        // Only save immediately if auto-save is enabled
+        let result: Result<URL, SaveError>?
+        let savedURL: URL?
+        if prefs.autoSaveScreenshots {
+            result = saveImage(image)
+            savedURL = try? result?.get()
+        } else {
+            result = nil
+            savedURL = nil
+        }
 
         // Auto-copy to clipboard if enabled (must be on main thread for NSPasteboard)
         // Now includes file URL for terminal compatibility (Ghostty, etc.)
@@ -163,7 +170,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Show overlay
         DispatchQueue.main.async {
-            switch result {
+            // When auto-save is disabled (no result), show overlay with save functionality
+            if result == nil {
+                self.showOverlayWithManualSave(image: image)
+                return
+            }
+
+            // Auto-save was attempted - handle success or failure
+            switch result! {
             case .success(let savedURL):
                 self.overlayController?.showOverlay(
                     image: image,
@@ -185,28 +199,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             case .failure(let error):
                 self.showSaveErrorAlert(error: error)
-                // Still show overlay but without save functionality
-                // No file URL available for clipboard in this case
-                self.overlayController?.showOverlay(
-                    image: image,
-                    savedURL: nil,
-                    onCopy: {
-                        self.copyToClipboard(image, fileURL: nil)
-                    },
-                    onSave: {
-                        // Can't show in Finder since save failed
-                    },
-                    onAnnotate: {
-                        DebugLogger.log("Overlay annotate clicked (no savedURL)")
-                        self.overlayController?.dismissOverlay()
-                        self.openAnnotationEditor(image: image, savedURL: nil)
-                    },
-                    onDelete: {
-                        // No file to delete since save failed
-                    }
-                )
+                // Auto-save failed - show overlay with manual save option to retry
+                self.showOverlayWithManualSave(image: image)
             }
         }
+    }
+
+    /// Shows overlay with manual save functionality (when auto-save is disabled)
+    private func showOverlayWithManualSave(image: NSImage) {
+        self.overlayController?.showOverlay(
+            image: image,
+            savedURL: nil,
+            onCopy: {
+                self.copyToClipboard(image, fileURL: nil)
+            },
+            onSave: {
+                // Manual save: save the file, then dismiss overlay
+                let result = self.saveImage(image)
+                switch result {
+                case .success(let url):
+                    logger.info("Manual save completed: \(url.path)")
+                    self.overlayController?.dismissOverlay()
+                case .failure(let error):
+                    self.showSaveErrorAlert(error: error)
+                }
+            },
+            onAnnotate: {
+                DebugLogger.log("Overlay annotate clicked (manual save mode)")
+                self.overlayController?.dismissOverlay()
+                self.openAnnotationEditor(image: image, savedURL: nil)
+            },
+            onDelete: {
+                // No file exists - just discard by dismissing overlay
+                logger.info("Discarding unsaved screenshot")
+                self.overlayController?.dismissOverlay()
+            }
+        )
     }
     
     private enum SaveError: LocalizedError {

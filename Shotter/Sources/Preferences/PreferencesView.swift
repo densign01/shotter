@@ -59,6 +59,8 @@ struct PreferencesView: View {
                     }
                 }
 
+                Toggle("Save screenshots automatically", isOn: $prefs.autoSaveScreenshots)
+
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
                 Text("General")
