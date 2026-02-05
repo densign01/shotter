@@ -210,7 +210,7 @@ class AnnotationEditorWindow: NSWindow {
     private func cancelAndClose() {
         DebugLogger.log("Cancel requested; annotationCount=\(state.annotations.count)")
         // Check if there are unsaved changes
-        if !state.annotations.isEmpty {
+        if state.hasUnsavedChanges {
             let alert = NSAlert()
             alert.messageText = "Discard Changes?"
             alert.informativeText = "You have unsaved annotations. Are you sure you want to close?"
@@ -307,7 +307,7 @@ extension AnnotationEditorWindow: NSWindowDelegate {
         if isProgrammaticClose {
             return true
         }
-        if !state.annotations.isEmpty {
+        if state.hasUnsavedChanges {
             cancelAndClose()
             return false
         }
@@ -367,6 +367,7 @@ struct AnnotationEditorView: View {
                 // Bottom bar with tool options (always visible for consistent layout)
                 Divider()
                 ToolOptionsBar(state: state)
+                DragMeBar(state: state)
             }
             .background(Color(NSColor.controlBackgroundColor))
         }
@@ -606,8 +607,8 @@ struct ToolOptionsBar: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            // Tool-specific options (not for select tool)
-            if state.currentToolType != .select {
+            // Tool-specific options (not for select, eraser, or crop tools)
+            if ![.select, .eraser, .crop].contains(state.currentToolType) {
                 // Color swatches with selection ring and hover effect
                 HStack(spacing: 6) {
                     ForEach(presetColors, id: \.self) { color in
@@ -716,6 +717,48 @@ struct ToolOptionsBar: View {
             return "Drag to blur region"
         case .counter:
             return "Click to place counter"
+        case .eraser:
+            return "Click annotation to remove it"
+        case .crop:
+            if state.cropRect != nil {
+                return "↩ Enter to apply crop • Esc to cancel"
+            }
+            return "Drag to select crop area"
+        }
+    }
+}
+
+// MARK: - Drag Me Bar
+
+struct DragMeBar: View {
+    @ObservedObject var state: AnnotationEditorState
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            Image(systemName: "hand.draw")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+            Text("Drag to any app")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .padding(.vertical, 6)
+        .background(Color(NSColor.windowBackgroundColor))
+        .onDrag {
+            guard let image = state.renderFinalImage(),
+                  let tiffData = image.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiffData),
+                  let pngData = bitmap.representation(using: .png, properties: [:]) else {
+                return NSItemProvider()
+            }
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(forTypeIdentifier: "public.png", visibility: .all) { completion in
+                completion(pngData, nil)
+                return nil
+            }
+            return provider
         }
     }
 }
