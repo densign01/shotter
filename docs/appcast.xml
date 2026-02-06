@@ -6,6 +6,27 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.5.0</title>
+      <pubDate>Wed, 05 Feb 2026 20:30:00 -0500</pubDate>
+      <sparkle:version>150</sparkle:version>
+      <sparkle:shortVersionString>1.5.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New in 1.5</h2>
+        <ul>
+          <li><strong>Crop Tool:</strong> Draw a selection to crop your screenshot, Enter to apply, Escape to cancel</li>
+          <li><strong>Eraser Tool:</strong> Click any annotation to remove it (shortcut: X)</li>
+          <li><strong>Drag & Drop:</strong> Drag annotated images directly into other apps from the bottom bar</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.5.0/Shotter-1.5.0.dmg"
+        length="2963537"
+        type="application/octet-stream"
+        sparkle:edSignature="bgmD6UVH2uXsvtmxXKlOdUDywyTe0dei9+UhMJ8f2yAUV4plAQfecXwjkK3yt0dg7ZWB7yh09GU37BV70xgmBg=="
+      />
+    </item>
+    <item>
       <title>Version 1.4.0</title>
       <pubDate>Tue, 28 Jan 2026 08:00:00 -0500</pubDate>
       <sparkle:version>140</sparkle:version>
