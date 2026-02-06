@@ -15,7 +15,8 @@ class AnnotationEditorState: ObservableObject {
     @Published var fontSize: CGFloat = 16
     @Published var editingTextAnnotationId: AnnotationID?
     @Published var nextCounterNumber: Int = 1
-    
+    @Published var cropRect: CGRect? = nil
+
     // Modifier keys
     var isShiftKeyHeld: Bool = false
     
@@ -33,8 +34,14 @@ class AnnotationEditorState: ObservableObject {
     
     // MARK: - Base Image
 
-    let baseImage: NSImage
-    let imageSize: CGSize
+    private(set) var baseImage: NSImage
+    private(set) var imageSize: CGSize
+    private(set) var hasBeenCropped: Bool = false
+
+    /// Whether the editor has changes worth prompting about on close
+    var hasUnsavedChanges: Bool {
+        !annotations.isEmpty || hasBeenCropped
+    }
 
     // Cached CIContext for blur operations (expensive to create)
     private let ciContext = CIContext()
@@ -54,9 +61,14 @@ class AnnotationEditorState: ObservableObject {
     // MARK: - Tool Management
     
     func setTool(_ type: AnnotationToolType) {
+        // If switching away from crop tool with an active crop rect, clear it
+        if currentToolType == .crop && type != .crop && cropRect != nil {
+            cropRect = nil
+        }
+
         currentToolType = type
         currentTool = AnnotationToolFactory.tool(for: type)
-        
+
         // Deselect when changing tools (except select tool)
         if type != .select {
             selectAnnotation(nil)
@@ -209,6 +221,78 @@ class AnnotationEditorState: ObservableObject {
         editingTextAnnotationId = nil
     }
     
+    // MARK: - Crop
+
+    func applyCrop() {
+        guard let crop = cropRect else { return }
+
+        // Clamp crop rect to image bounds
+        let imageBounds = CGRect(origin: .zero, size: imageSize)
+        let clampedCrop = crop.intersection(imageBounds)
+        guard !clampedCrop.isNull && clampedCrop.width > 1 && clampedCrop.height > 1 else {
+            cropRect = nil
+            return
+        }
+
+        // Create cropped image via CGImage to preserve Retina pixel density
+        let newSize = clampedCrop.size
+        guard let cgImage = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let croppedCG = cgImage.cropping(to: clampedCrop) else {
+            cropRect = nil
+            return
+        }
+        let croppedImage = NSImage(cgImage: croppedCG, size: newSize)
+
+        // Offset all annotations by subtracting crop origin
+        let offsetX = -clampedCrop.origin.x
+        let offsetY = -clampedCrop.origin.y
+        let newImageBounds = CGRect(origin: .zero, size: newSize)
+
+        var updatedAnnotations: [AnyAnnotation] = []
+        for anyAnnotation in annotations {
+            var annotation = anyAnnotation.annotation
+
+            if var arrow = annotation as? ArrowAnnotation {
+                arrow.translate(by: CGPoint(x: offsetX, y: offsetY))
+                // Check if still within new image bounds
+                if arrow.bounds.intersects(newImageBounds) {
+                    updatedAnnotations.append(AnyAnnotation(arrow))
+                }
+            } else if var line = annotation as? LineAnnotation {
+                line.translate(by: CGPoint(x: offsetX, y: offsetY))
+                if line.bounds.intersects(newImageBounds) {
+                    updatedAnnotations.append(AnyAnnotation(line))
+                }
+            } else {
+                annotation.bounds = CGRect(
+                    x: annotation.bounds.origin.x + offsetX,
+                    y: annotation.bounds.origin.y + offsetY,
+                    width: annotation.bounds.width,
+                    height: annotation.bounds.height
+                )
+                if annotation.bounds.intersects(newImageBounds) {
+                    updatedAnnotations.append(AnyAnnotation(annotation))
+                }
+            }
+        }
+
+        // Apply changes
+        baseImage = croppedImage
+        imageSize = newSize
+        hasBeenCropped = true
+        annotations = updatedAnnotations
+        selectedAnnotationId = nil
+        cropRect = nil
+        undoStack.removeAll()
+        redoStack.removeAll()
+        setTool(.select)
+    }
+
+    func cancelCrop() {
+        cropRect = nil
+        setTool(.select)
+    }
+
     // MARK: - Rendering
     
     /// Render the final image with all annotations
@@ -319,14 +403,24 @@ extension AnnotationEditorState {
                 }
             }
             
+            // Enter/Return to confirm crop
+            if (event.keyCode == 36 || event.keyCode == 76) && cropRect != nil {
+                applyCrop()
+                return true
+            }
+
             // Delete key
             if event.keyCode == 51 || event.keyCode == 117 { // Backspace or Delete
                 deleteSelectedAnnotation()
                 return true
             }
-            
-            // Escape
+
+            // Escape - cancel crop if active, otherwise normal deselect
             if event.keyCode == 53 {
+                if cropRect != nil {
+                    cancelCrop()
+                    return true
+                }
                 selectAnnotation(nil)
                 editingTextAnnotationId = nil
                 return true

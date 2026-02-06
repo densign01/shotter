@@ -11,6 +11,8 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
     case text = "Text"
     case blur = "Blur"
     case counter = "Counter"
+    case eraser = "Eraser"
+    case crop = "Crop"
     
     var id: String { rawValue }
     
@@ -24,6 +26,8 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
         case .text: return "textformat"
         case .blur: return "drop.halffull"
         case .counter: return "number.circle"
+        case .eraser: return "eraser"
+        case .crop: return "crop"
         }
     }
     
@@ -37,6 +41,8 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
         case .text: return "Add text (T)"
         case .blur: return "Blur region (B)"
         case .counter: return "Add numbered counter (C)"
+        case .eraser: return "Click annotation to remove (X)"
+        case .crop: return "Crop screenshot"
         }
     }
     
@@ -50,6 +56,8 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
         case .text: return "t"
         case .blur: return "b"
         case .counter: return "c"
+        case .eraser: return "x"
+        case .crop: return nil
         }
     }
 }
@@ -516,6 +524,63 @@ class CounterTool: AnnotationTool {
     }
 }
 
+// MARK: - Eraser Tool
+
+class EraserTool: AnnotationTool {
+    let toolType: AnnotationToolType = .eraser
+    var cursor: NSCursor { .disappearingItem }
+
+    func mouseDown(at point: CGPoint, state: AnnotationEditorState) {
+        // Find the topmost annotation under the click and remove it
+        for annotation in state.annotations.reversed() {
+            if annotation.annotation.hitTest(point: point, tolerance: 5) {
+                state.removeAnnotation(annotation.id)
+                return
+            }
+        }
+    }
+
+    func mouseDragged(to point: CGPoint, state: AnnotationEditorState) {
+        // Eraser doesn't drag
+    }
+
+    func mouseUp(at point: CGPoint, state: AnnotationEditorState) {
+        // Nothing to do
+    }
+}
+
+// MARK: - Crop Tool
+
+class CropTool: AnnotationTool {
+    let toolType: AnnotationToolType = .crop
+    var cursor: NSCursor { .crosshair }
+
+    private var startPoint: CGPoint?
+
+    func mouseDown(at point: CGPoint, state: AnnotationEditorState) {
+        startPoint = point
+        state.cropRect = CGRect(origin: point, size: .zero)
+    }
+
+    func mouseDragged(to point: CGPoint, state: AnnotationEditorState) {
+        guard let start = startPoint else { return }
+        state.cropRect = CGRect(
+            x: min(start.x, point.x),
+            y: min(start.y, point.y),
+            width: abs(point.x - start.x),
+            height: abs(point.y - start.y)
+        )
+    }
+
+    func mouseUp(at point: CGPoint, state: AnnotationEditorState) {
+        // If crop rect is too small, cancel
+        if let rect = state.cropRect, rect.width < 10 || rect.height < 10 {
+            state.cropRect = nil
+        }
+        startPoint = nil
+    }
+}
+
 // MARK: - Tool Factory
 
 struct AnnotationToolFactory {
@@ -529,6 +594,8 @@ struct AnnotationToolFactory {
         case .text: return TextTool()
         case .blur: return BlurTool()
         case .counter: return CounterTool()
+        case .eraser: return EraserTool()
+        case .crop: return CropTool()
         }
     }
 }

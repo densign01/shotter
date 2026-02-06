@@ -93,8 +93,35 @@ class AnnotationCanvasView: NSView {
         }
         
         context.restoreGState()
+
+        // Draw crop overlay if active
+        if let cropRect = state.cropRect {
+            let scaledCropRect = CGRect(
+                x: imageRect.origin.x + cropRect.origin.x * scale,
+                y: imageRect.origin.y + cropRect.origin.y * scale,
+                width: cropRect.width * scale,
+                height: cropRect.height * scale
+            )
+
+            // Dark overlay outside crop area using even-odd rule
+            context.saveGState()
+            context.clip(to: imageRect)
+            context.setFillColor(NSColor.black.withAlphaComponent(0.5).cgColor)
+            let path = CGMutablePath()
+            path.addRect(imageRect)
+            path.addRect(scaledCropRect)
+            context.addPath(path)
+            context.fillPath(using: .evenOdd)
+
+            // Dashed border around crop area
+            context.setStrokeColor(NSColor.white.cgColor)
+            context.setLineWidth(2)
+            context.setLineDash(phase: 0, lengths: [6, 4])
+            context.stroke(scaledCropRect)
+            context.restoreGState()
+        }
     }
-    
+
     private func imageRectInView() -> CGRect {
         guard let state = state else { return .zero }
         
