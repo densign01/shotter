@@ -6,6 +6,28 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.6.0</title>
+      <pubDate>Thu, 06 Feb 2026 21:00:00 -0500</pubDate>
+      <sparkle:version>160</sparkle:version>
+      <sparkle:shortVersionString>1.6.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New in 1.6</h2>
+        <ul>
+          <li><strong>Highlighter Tool:</strong> New brush-style highlighter in annotation editor (shortcut: H)</li>
+          <li>Follows your drag path with semi-transparent stroke</li>
+          <li>Uses selected color at 40% opacity</li>
+          <li>Brush width scales with stroke width setting</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.6.0/Shotter-1.6.0.dmg"
+        length="2968747"
+        type="application/octet-stream"
+        sparkle:edSignature="LftR+JQ1HnWkAM108xWTZzD5+rJEjZAlyUfUaNuKq6AXA5kvhejwEKFlaWU8QhFrzDFVxgQRwohEnfukf4zWBA=="
+      />
+    </item>
+    <item>
       <title>Version 1.5.0</title>
       <pubDate>Wed, 05 Feb 2026 20:30:00 -0500</pubDate>
       <sparkle:version>150</sparkle:version>
