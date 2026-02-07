@@ -73,6 +73,7 @@ class AnnotationEditorState: ObservableObject {
         if type != .select {
             selectAnnotation(nil)
         }
+
     }
     
     // MARK: - Annotation Management

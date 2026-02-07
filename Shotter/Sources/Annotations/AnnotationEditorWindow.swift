@@ -724,6 +724,8 @@ struct ToolOptionsBar: View {
                 return "↩ Enter to apply crop • Esc to cancel"
             }
             return "Drag to select crop area"
+        case .textHighlight:
+            return "Drag to highlight"
         }
     }
 }

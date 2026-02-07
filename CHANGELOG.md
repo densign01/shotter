@@ -4,6 +4,16 @@ All notable changes to Shotter will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.0] - 2026-02-06
+
+### Added
+
+- Highlighter tool in annotation editor (shortcut: H)
+  - Brush-style highlighting that follows your drag path
+  - Semi-transparent overlay with rounded stroke
+  - Uses selected color at 40% opacity
+  - Brush width scales with stroke width setting
+
 ## [1.5.0] - 2026-02-05
 
 ### Added

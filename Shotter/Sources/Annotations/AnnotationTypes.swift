@@ -649,3 +649,121 @@ struct CounterAnnotation: Annotation {
         lhs.id == rhs.id
     }
 }
+
+// MARK: - Text Highlight Annotation
+
+struct TextHighlightAnnotation: Annotation {
+    let id: AnnotationID
+    var bounds: CGRect
+    var isSelected: Bool = false
+    var strokeColor: NSColor
+    var strokeWidth: CGFloat
+    var fillColor: NSColor?
+    let createdAt: Date
+
+    /// Brush path points for the highlight stroke
+    var brushPath: [CGPoint] = []
+
+    /// Brush stroke width
+    var brushWidth: CGFloat = 20
+
+    /// Opacity for the highlight overlay (0.0 - 1.0)
+    var highlightOpacity: CGFloat = 0.4
+
+    init(fillColor: NSColor = .systemYellow, highlightOpacity: CGFloat = 0.4) {
+        self.id = UUID()
+        self.fillColor = fillColor
+        self.highlightOpacity = highlightOpacity
+        self.strokeColor = .clear
+        self.strokeWidth = 0
+        self.createdAt = Date()
+        self.bounds = .zero
+    }
+
+    mutating func updateBounds() {
+        guard !brushPath.isEmpty else {
+            bounds = .zero
+            return
+        }
+
+        let halfWidth = brushWidth / 2
+        var minX = brushPath[0].x - halfWidth
+        var minY = brushPath[0].y - halfWidth
+        var maxX = brushPath[0].x + halfWidth
+        var maxY = brushPath[0].y + halfWidth
+
+        for point in brushPath {
+            minX = min(minX, point.x - halfWidth)
+            minY = min(minY, point.y - halfWidth)
+            maxX = max(maxX, point.x + halfWidth)
+            maxY = max(maxY, point.y + halfWidth)
+        }
+
+        bounds = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    func render(in context: CGContext, scale: CGFloat) {
+        guard brushPath.count >= 2 else { return }
+
+        context.saveGState()
+
+        // Get highlight color with applied opacity
+        let highlightColor: NSColor
+        if let fill = fillColor {
+            highlightColor = fill.withAlphaComponent(highlightOpacity)
+        } else {
+            highlightColor = NSColor.systemYellow.withAlphaComponent(highlightOpacity)
+        }
+
+        // Draw thick brush stroke
+        context.setStrokeColor(highlightColor.cgColor)
+        context.setLineWidth(brushWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+
+        context.move(to: brushPath[0])
+        for point in brushPath.dropFirst() {
+            context.addLine(to: point)
+        }
+        context.strokePath()
+
+        context.restoreGState()
+    }
+
+    func hitTest(point: CGPoint, tolerance: CGFloat) -> Bool {
+        // Early exit: check bounds first for performance
+        guard bounds.insetBy(dx: -tolerance, dy: -tolerance).contains(point) else {
+            return false
+        }
+
+        // Check if point is near any part of the brush path
+        let hitDistance = brushWidth / 2 + tolerance
+        for pathPoint in brushPath {
+            let dx = point.x - pathPoint.x
+            let dy = point.y - pathPoint.y
+            if sqrt(dx * dx + dy * dy) < hitDistance {
+                return true
+            }
+        }
+        return false
+    }
+
+    func copy() -> any Annotation {
+        var copy = self
+        copy.isSelected = false
+        return copy
+    }
+
+    mutating func translate(by delta: CGPoint) {
+        brushPath = brushPath.map { CGPoint(x: $0.x + delta.x, y: $0.y + delta.y) }
+        updateBounds()
+    }
+
+    func resizeHandles() -> [ResizeHandle] {
+        return []
+    }
+
+    static func == (lhs: TextHighlightAnnotation, rhs: TextHighlightAnnotation) -> Bool {
+        lhs.id == rhs.id
+    }
+}

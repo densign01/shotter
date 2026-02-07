@@ -13,6 +13,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
     case counter = "Counter"
     case eraser = "Eraser"
     case crop = "Crop"
+    case textHighlight = "Text Highlight"
     
     var id: String { rawValue }
     
@@ -28,6 +29,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
         case .counter: return "number.circle"
         case .eraser: return "eraser"
         case .crop: return "crop"
+        case .textHighlight: return "highlighter"
         }
     }
     
@@ -43,6 +45,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
         case .counter: return "Add numbered counter (C)"
         case .eraser: return "Click annotation to remove (X)"
         case .crop: return "Crop screenshot"
+        case .textHighlight: return "Text Highlight (H)"
         }
     }
     
@@ -58,6 +61,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
         case .counter: return "c"
         case .eraser: return "x"
         case .crop: return nil
+        case .textHighlight: return "h"
         }
     }
 }
@@ -581,6 +585,47 @@ class CropTool: AnnotationTool {
     }
 }
 
+// MARK: - Highlight Tool (paint brush style)
+
+class TextHighlightTool: AnnotationTool {
+    let toolType: AnnotationToolType = .textHighlight
+    var cursor: NSCursor { .crosshair }
+
+    private var currentAnnotation: TextHighlightAnnotation?
+    private var brushPath: [CGPoint] = []
+
+    func mouseDown(at point: CGPoint, state: AnnotationEditorState) {
+        brushPath = [point]
+
+        var annotation = TextHighlightAnnotation(fillColor: state.currentColor)
+        annotation.brushPath = [point]
+        annotation.brushWidth = max(state.strokeWidth * 6, 18) // Highlighter is thick
+        currentAnnotation = annotation
+        state.addAnnotation(annotation)
+    }
+
+    func mouseDragged(to point: CGPoint, state: AnnotationEditorState) {
+        guard var annotation = currentAnnotation else { return }
+
+        brushPath.append(point)
+        annotation.brushPath = brushPath
+        annotation.updateBounds()
+        state.updateAnnotation(annotation)
+        currentAnnotation = annotation
+    }
+
+    func mouseUp(at point: CGPoint, state: AnnotationEditorState) {
+        guard let annotation = currentAnnotation else { return }
+
+        if brushPath.count < 2 {
+            state.removeAnnotation(annotation.id)
+        }
+
+        brushPath = []
+        currentAnnotation = nil
+    }
+}
+
 // MARK: - Tool Factory
 
 struct AnnotationToolFactory {
@@ -596,6 +641,7 @@ struct AnnotationToolFactory {
         case .counter: return CounterTool()
         case .eraser: return EraserTool()
         case .crop: return CropTool()
+        case .textHighlight: return TextHighlightTool()
         }
     }
 }
