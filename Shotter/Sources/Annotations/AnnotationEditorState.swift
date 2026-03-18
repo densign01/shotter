@@ -16,6 +16,7 @@ class AnnotationEditorState: ObservableObject {
     @Published var editingTextAnnotationId: AnnotationID?
     @Published var nextCounterNumber: Int = 1
     @Published var cropRect: CGRect? = nil
+    @Published private(set) var canvasFocusRequestID: Int = 0
 
     // Modifier keys
     var isShiftKeyHeld: Bool = false
@@ -109,6 +110,13 @@ class AnnotationEditorState: ObservableObject {
             )
             line.translate(by: delta)
             annotations[index] = AnyAnnotation(line)
+        } else if var highlight = annotation as? TextHighlightAnnotation {
+            let delta = CGPoint(
+                x: bounds.origin.x - highlight.bounds.origin.x,
+                y: bounds.origin.y - highlight.bounds.origin.y
+            )
+            highlight.translate(by: delta)
+            annotations[index] = AnyAnnotation(highlight)
         } else {
             var mutableAnnotation = annotation
             mutableAnnotation.bounds = bounds
@@ -188,6 +196,10 @@ class AnnotationEditorState: ObservableObject {
         }
         redoStack.removeAll()
     }
+
+    func saveUndoCheckpoint() {
+        saveUndoState()
+    }
     
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
@@ -220,6 +232,11 @@ class AnnotationEditorState: ObservableObject {
     
     func finishTextEditing() {
         editingTextAnnotationId = nil
+        requestCanvasFocus()
+    }
+
+    func requestCanvasFocus() {
+        canvasFocusRequestID &+= 1
     }
     
     // MARK: - Crop
@@ -237,11 +254,30 @@ class AnnotationEditorState: ObservableObject {
 
         // Create cropped image via CGImage to preserve Retina pixel density
         let newSize = clampedCrop.size
-        guard let cgImage = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let croppedCG = cgImage.cropping(to: clampedCrop) else {
+        guard let cgImage = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             cropRect = nil
             return
         }
+
+        let scaleX = CGFloat(cgImage.width) / imageSize.width
+        let scaleY = CGFloat(cgImage.height) / imageSize.height
+        let pixelCrop = CGRect(
+            x: clampedCrop.origin.x * scaleX,
+            y: (imageSize.height - clampedCrop.maxY) * scaleY,
+            width: clampedCrop.width * scaleX,
+            height: clampedCrop.height * scaleY
+        ).integral
+        let pixelBounds = CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height)
+        let clampedPixelCrop = pixelCrop.intersection(pixelBounds)
+
+        guard !clampedPixelCrop.isNull,
+              clampedPixelCrop.width > 1,
+              clampedPixelCrop.height > 1,
+              let croppedCG = cgImage.cropping(to: clampedPixelCrop) else {
+            cropRect = nil
+            return
+        }
+
         let croppedImage = NSImage(cgImage: croppedCG, size: newSize)
 
         // Offset all annotations by subtracting crop origin
@@ -263,6 +299,11 @@ class AnnotationEditorState: ObservableObject {
                 line.translate(by: CGPoint(x: offsetX, y: offsetY))
                 if line.bounds.intersects(newImageBounds) {
                     updatedAnnotations.append(AnyAnnotation(line))
+                }
+            } else if var highlight = annotation as? TextHighlightAnnotation {
+                highlight.translate(by: CGPoint(x: offsetX, y: offsetY))
+                if highlight.bounds.intersects(newImageBounds) {
+                    updatedAnnotations.append(AnyAnnotation(highlight))
                 }
             } else {
                 annotation.bounds = CGRect(

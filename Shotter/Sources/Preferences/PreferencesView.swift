@@ -142,6 +142,20 @@ struct PreferencesView: View {
         }
         .formStyle(.grouped)
         .frame(width: 480, height: 480)
+        .alert("Launch at Login Failed", isPresented: Binding(
+            get: { prefs.launchAtLoginErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    prefs.clearLaunchAtLoginError()
+                }
+            }
+        )) {
+            Button("OK", role: .cancel) {
+                prefs.clearLaunchAtLoginError()
+            }
+        } message: {
+            Text(prefs.launchAtLoginErrorMessage ?? "Shotter could not update its launch-at-login registration.")
+        }
     }
     
     private func chooseSaveLocation() {

@@ -8,6 +8,7 @@ class HotkeyManager {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var shortcutObserver: NSObjectProtocol?
+    private var activationObserver: NSObjectProtocol?
     
     private let onFullscreen: (Bool) -> Void  // Bool = directCopy (Option held)
     private let onArea: (Bool) -> Void
@@ -35,11 +36,15 @@ class HotkeyManager {
         
         setupEventTap()
         observeShortcutChanges()
+        observePermissionRefreshTriggers()
     }
     
     deinit {
         removeEventTap()
         if let observer = shortcutObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = activationObserver {
             NotificationCenter.default.removeObserver(observer)
         }
     }
@@ -61,8 +66,34 @@ class HotkeyManager {
         windowShortcut = prefs.shortcutWindow
         logger.info("Shortcuts reloaded")
     }
+
+    private func observePermissionRefreshTriggers() {
+        activationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.refreshEventTapRegistration()
+        }
+    }
+
+    private func refreshEventTapRegistration() {
+        Permissions.invalidateCache()
+
+        guard Permissions.checkAccessibility() else {
+            removeEventTap()
+            logger.info("Accessibility unavailable - hotkey event tap removed")
+            return
+        }
+
+        if eventTap == nil {
+            setupEventTap()
+        }
+    }
     
     private func setupEventTap() {
+        guard eventTap == nil else { return }
+
         // Check accessibility permissions
         guard Permissions.checkAccessibility() else {
             logger.warning("Accessibility permission not granted - hotkeys disabled")
@@ -121,28 +152,45 @@ class HotkeyManager {
         
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
-        let optionHeld = flags.contains(.maskAlternate)
 
         // Check fullscreen shortcut (allow Option as extra modifier for direct-copy)
         if fullscreenShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: fullscreenShortcut, allowExtraOption: true) {
+            guard Permissions.checkScreenRecordingSync(forceRefresh: true) else {
+                logger.info("Screen recording unavailable - allowing native fullscreen shortcut")
+                return Unmanaged.passRetained(event)
+            }
+
+            let directCopyRequested = directCopyRequested(flags: flags, shortcut: fullscreenShortcut)
             DispatchQueue.main.async {
-                self.onFullscreen(optionHeld)
+                self.onFullscreen(directCopyRequested)
             }
             return nil // Consume the event
         }
 
         // Check area shortcut
         if areaShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: areaShortcut, allowExtraOption: true) {
+            guard Permissions.checkScreenRecordingSync(forceRefresh: true) else {
+                logger.info("Screen recording unavailable - allowing native area shortcut")
+                return Unmanaged.passRetained(event)
+            }
+
+            let directCopyRequested = directCopyRequested(flags: flags, shortcut: areaShortcut)
             DispatchQueue.main.async {
-                self.onArea(optionHeld)
+                self.onArea(directCopyRequested)
             }
             return nil // Consume the event
         }
 
         // Check window shortcut (only if enabled - disabled by default)
         if windowShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: windowShortcut, allowExtraOption: true) {
+            guard Permissions.checkScreenRecordingSync(forceRefresh: true) else {
+                logger.info("Screen recording unavailable - allowing native window shortcut")
+                return Unmanaged.passRetained(event)
+            }
+
+            let directCopyRequested = directCopyRequested(flags: flags, shortcut: windowShortcut)
             DispatchQueue.main.async {
-                self.onWindow(optionHeld)
+                self.onWindow(directCopyRequested)
             }
             return nil // Consume the event
         }
@@ -170,6 +218,11 @@ class HotkeyManager {
         }
 
         return hasCommand && hasShift && hasOption && hasControl
+    }
+
+    private func directCopyRequested(flags: CGEventFlags, shortcut: ShortcutConfig) -> Bool {
+        let requiredFlags = CGEventFlags(rawValue: UInt64(shortcut.modifiers))
+        return flags.contains(.maskAlternate) && !requiredFlags.contains(.maskAlternate)
     }
     
     private func removeEventTap() {

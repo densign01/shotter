@@ -83,6 +83,7 @@ class PreferencesManager: ObservableObject {
     static let shared = PreferencesManager()
     
     private let defaults = UserDefaults.standard
+    private var isSyncingLaunchAtLogin = false
     
     private enum Keys {
         static let saveLocation = "saveLocation"
@@ -111,10 +112,13 @@ class PreferencesManager: ObservableObject {
     
     @Published var launchAtLogin: Bool {
         didSet {
+            guard !isSyncingLaunchAtLogin else { return }
             defaults.set(launchAtLogin, forKey: Keys.launchAtLogin)
-            updateLaunchAtLogin()
+            applyLaunchAtLoginChange(desiredState: launchAtLogin)
         }
     }
+
+    @Published var launchAtLoginErrorMessage: String?
     
     @Published var playCaptureSound: Bool {
         didSet {
@@ -178,6 +182,8 @@ class PreferencesManager: ObservableObject {
     }
     
     private init() {
+        let actualLaunchAtLogin = Self.isLaunchAtLoginEnabledInSystem()
+
         // Load save location
         if let path = defaults.string(forKey: Keys.saveLocation) {
             saveLocation = URL(fileURLWithPath: path)
@@ -198,8 +204,8 @@ class PreferencesManager: ObservableObject {
             overlayAutoDismissDelay = 5.0   // Default
         }
         
-        // Load launch at login
-        launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
+        // Load launch at login from the OS, not stale defaults
+        launchAtLogin = actualLaunchAtLogin
         
         // Load capture sound preference (default to true)
         if defaults.object(forKey: Keys.playCaptureSound) == nil {
@@ -230,17 +236,43 @@ class PreferencesManager: ObservableObject {
         } else {
             overlayPosition = .bottomLeft
         }
+
+        defaults.set(actualLaunchAtLogin, forKey: Keys.launchAtLogin)
     }
     
-    private func updateLaunchAtLogin() {
+    private func applyLaunchAtLoginChange(desiredState: Bool) {
         do {
-            if launchAtLogin {
+            if desiredState {
                 try SMAppService.mainApp.register()
             } else {
                 try SMAppService.mainApp.unregister()
             }
+            syncLaunchAtLoginWithSystem()
         } catch {
             logger.error("Failed to update launch at login: \(error.localizedDescription)")
+            launchAtLoginErrorMessage = error.localizedDescription
+            syncLaunchAtLoginWithSystem()
+        }
+    }
+
+    func clearLaunchAtLoginError() {
+        launchAtLoginErrorMessage = nil
+    }
+
+    private func syncLaunchAtLoginWithSystem() {
+        let actualState = Self.isLaunchAtLoginEnabledInSystem()
+        isSyncingLaunchAtLogin = true
+        launchAtLogin = actualState
+        isSyncingLaunchAtLogin = false
+        defaults.set(actualState, forKey: Keys.launchAtLogin)
+    }
+
+    private static func isLaunchAtLoginEnabledInSystem() -> Bool {
+        switch SMAppService.mainApp.status {
+        case .enabled, .requiresApproval:
+            return true
+        default:
+            return false
         }
     }
 }

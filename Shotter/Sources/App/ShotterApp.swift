@@ -92,47 +92,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func captureFullscreen(directCopy: Bool = false) {
         Task {
-            guard let image = await captureEngine?.captureFullscreen() else {
+            guard let result = await captureEngine?.captureFullscreen() else {
                 logger.warning("Failed to capture fullscreen")
                 return
             }
-            handleCapture(image, directCopy: directCopy)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
         }
     }
 
     private func captureArea(directCopy: Bool = false) {
         Task {
-            guard let image = await captureEngine?.captureArea() else {
+            guard let result = await captureEngine?.captureArea() else {
                 // User cancelled or capture failed - not necessarily an error
                 logger.info("Area capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(image, directCopy: directCopy)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
         }
     }
 
     private func captureWindow(directCopy: Bool = false) {
         Task {
-            guard let image = await captureEngine?.captureWindowInteractive() else {
+            guard let result = await captureEngine?.captureWindowInteractive() else {
                 // User cancelled or capture failed
                 logger.info("Window capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(image, directCopy: directCopy)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
         }
     }
     
     private func captureDisplay(_ display: CaptureDisplay) {
         Task {
-            guard let image = await captureEngine?.captureDisplay(display) else {
+            guard let result = await captureEngine?.captureDisplay(display) else {
                 logger.warning("Failed to capture display: \(display.name)")
                 return
             }
-            handleCapture(image)
+            handleCapture(result.image, preferredScreen: result.preferredScreen)
         }
     }
     
-    private func handleCapture(_ image: NSImage, directCopy: Bool = false) {
+    private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) {
         let prefs = PreferencesManager.shared
 
         // Direct-copy mode: Option held + auto-copy is OFF → copy and skip overlay
@@ -172,7 +172,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             // When auto-save is disabled (no result), show overlay with save functionality
             if result == nil {
-                self.showOverlayWithManualSave(image: image)
+                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen)
                 return
             }
 
@@ -182,6 +182,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.overlayController?.showOverlay(
                     image: image,
                     savedURL: savedURL,
+                    preferredScreen: preferredScreen,
                     onCopy: {
                         self.copyToClipboard(image, fileURL: savedURL)
                     },
@@ -191,7 +192,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     onAnnotate: {
                         DebugLogger.log("Overlay annotate clicked (savedURL available)")
                         self.overlayController?.dismissOverlay()
-                        self.openAnnotationEditor(image: image, savedURL: savedURL)
+                        self.openAnnotationEditor(image: image, savedURL: savedURL, preferredScreen: preferredScreen)
                     },
                     onDelete: {
                         self.moveToTrash(savedURL)
@@ -200,16 +201,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .failure(let error):
                 self.showSaveErrorAlert(error: error)
                 // Auto-save failed - show overlay with manual save option to retry
-                self.showOverlayWithManualSave(image: image)
+                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen)
             }
         }
     }
 
     /// Shows overlay with manual save functionality (when auto-save is disabled)
-    private func showOverlayWithManualSave(image: NSImage) {
+    private func showOverlayWithManualSave(image: NSImage, preferredScreen: NSScreen?) {
         self.overlayController?.showOverlay(
             image: image,
             savedURL: nil,
+            preferredScreen: preferredScreen,
             onCopy: {
                 self.copyToClipboard(image, fileURL: nil)
             },
@@ -227,7 +229,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onAnnotate: {
                 DebugLogger.log("Overlay annotate clicked (manual save mode)")
                 self.overlayController?.dismissOverlay()
-                self.openAnnotationEditor(image: image, savedURL: nil)
+                self.openAnnotationEditor(image: image, savedURL: nil, preferredScreen: preferredScreen)
             },
             onDelete: {
                 // No file exists - just discard by dismissing overlay
@@ -342,7 +344,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func openSaveFolder() {
-        NSWorkspace.shared.open(PreferencesManager.shared.saveLocation)
+        let saveLocation = PreferencesManager.shared.saveLocation
+
+        do {
+            try FileManager.default.createDirectory(at: saveLocation, withIntermediateDirectories: true)
+        } catch {
+            logger.error("Failed to create save directory before opening: \(error.localizedDescription)")
+        }
+
+        NSWorkspace.shared.open(saveLocation)
     }
     
     private func openPreferences() {
@@ -368,11 +378,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
     
-    private func openAnnotationEditor(image: NSImage, savedURL: URL?) {
-        DebugLogger.log("Opening annotation editor; savedURL=\(savedURL?.path ?? "nil")")
+    private func openAnnotationEditor(image: NSImage, savedURL: URL?, preferredScreen: NSScreen?) {
+        DebugLogger.log("Opening annotation editor; savedURL=\(savedURL?.path ?? "nil"), preferredScreen=\(preferredScreen?.localizedName ?? "nil")")
         AnnotationEditorController.shared.openEditor(
             image: image,
             savedURL: savedURL,
+            preferredScreen: preferredScreen,
             onComplete: { _ in
                 // Annotation complete - image was saved
                 DebugLogger.log("Annotation editor completed")
@@ -413,11 +424,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         alert.informativeText = message
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Later")
-        
+
+        if needsScreenRecording && needsAccessibility {
+            alert.addButton(withTitle: "Open Screen Recording")
+            alert.addButton(withTitle: "Open Accessibility")
+            alert.addButton(withTitle: "Later")
+        } else {
+            alert.addButton(withTitle: "Open System Settings")
+            alert.addButton(withTitle: "Later")
+        }
+
         let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
+        if needsScreenRecording && needsAccessibility {
+            if response == .alertFirstButtonReturn {
+                Permissions.openSystemPreferences(privacy: "Privacy_ScreenCapture")
+            } else if response == .alertSecondButtonReturn {
+                Permissions.openSystemPreferences(privacy: "Privacy_Accessibility")
+            }
+        } else if response == .alertFirstButtonReturn {
             if needsScreenRecording {
                 Permissions.openSystemPreferences(privacy: "Privacy_ScreenCapture")
             } else if needsAccessibility {

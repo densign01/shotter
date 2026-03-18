@@ -37,7 +37,7 @@ extension NSScreen {
 
 /// Result of area/window selection - either an area rect or a window
 enum AreaSelectorResult {
-    case area(CGRect, NSScreen)
+    case area(CGRect)
     case window(SCWindow)
     case cancelled
 }
@@ -61,8 +61,8 @@ class AreaSelectorWindow {
         
         // Create coordinator to sync selection state across screens
         coordinator = AreaSelectionCoordinator()
-        coordinator?.onAreaComplete = { [weak self] rect, screen in
-            self?.handleAreaComplete(rect, screen: screen)
+        coordinator?.onAreaComplete = { [weak self] rect in
+            self?.handleAreaComplete(rect)
         }
         coordinator?.onWindowSelected = { [weak self] window in
             self?.handleWindowSelected(window)
@@ -90,14 +90,14 @@ class AreaSelectorWindow {
         }
     }
 
-    private func handleAreaComplete(_ rect: CGRect, screen: NSScreen) {
+    private func handleAreaComplete(_ rect: CGRect) {
         guard !hasCompleted else { return }
         hasCompleted = true
         NSCursor.pop()
         for window in overlayWindows {
             window.orderOut(nil)
         }
-        completion?(.area(rect, screen))
+        completion?(.area(rect))
         completion = nil
     }
 
@@ -126,7 +126,7 @@ class AreaSelectorWindow {
 
 /// Coordinates selection state across multiple screens
 class AreaSelectionCoordinator {
-    var onAreaComplete: ((CGRect, NSScreen) -> Void)?
+    var onAreaComplete: ((CGRect) -> Void)?
     var onWindowSelected: ((SCWindow) -> Void)?
     var onCancel: (() -> Void)?
     
@@ -244,7 +244,7 @@ class AreaSelectionCoordinator {
         updateAllViews()
     }
     
-    func endSelection(at point: NSPoint, screen: NSScreen) {
+    func endSelection(at point: NSPoint) {
         guard mode == .area, isSelecting, let start = selectionStart else { return }
         isSelecting = false
         selectionEnd = point
@@ -253,14 +253,7 @@ class AreaSelectionCoordinator {
         
         // Minimum size check
         if rect.width > 10 && rect.height > 10 {
-            // Convert to screen coordinates (flip Y for the active screen)
-            let flippedRect = CGRect(
-                x: rect.origin.x - screen.frame.origin.x,
-                y: screen.frame.height - (rect.origin.y - screen.frame.origin.y) - rect.height,
-                width: rect.width,
-                height: rect.height
-            )
-            onAreaComplete?(flippedRect, screen)
+            onAreaComplete?(rect)
         } else {
             onCancel?()
         }
@@ -640,9 +633,7 @@ class AreaSelectionView: NSView {
         let localPoint = convert(event.locationInWindow, from: nil)
         let globalPoint = NSPoint(x: localPoint.x + screen.frame.origin.x, y: localPoint.y + screen.frame.origin.y)
         
-        // Determine which screen the selection ends on
-        let endScreen = NSScreen.screens.first { $0.frame.contains(globalPoint) } ?? screen
-        coordinator.endSelection(at: globalPoint, screen: endScreen)
+        coordinator.endSelection(at: globalPoint)
     }
     
     override func mouseMoved(with event: NSEvent) {

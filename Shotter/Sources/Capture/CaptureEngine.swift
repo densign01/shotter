@@ -12,22 +12,21 @@ struct CaptureDisplay: Identifiable {
     let name: String
     let isMain: Bool
     let frame: CGRect
-    
+
     var scaleFactor: CGFloat {
         screen?.backingScaleFactor ?? 2.0
     }
 }
 
-/// Result of area selection, including which display was selected
+/// Result of area selection in global Cocoa coordinates.
 struct AreaCaptureResult {
-    let rect: CGRect
-    let display: CaptureDisplay
+    let globalRect: CGRect
 }
 
-/// Result of window selection
-struct WindowSelectionResult {
-    let window: SCWindow
-    let display: CaptureDisplay
+/// Finalized capture output with optional placement metadata.
+struct CaptureResult {
+    let image: NSImage
+    let preferredScreen: NSScreen?
 }
 
 class CaptureEngine {
@@ -42,7 +41,7 @@ class CaptureEngine {
             await refreshAvailableContent()
         }
     }
-    
+
     private func refreshAvailableContent() async {
         do {
             // excludingDesktopWindows: true filters out Finder desktop windows
@@ -51,155 +50,223 @@ class CaptureEngine {
             logger.error("Failed to get available content: \(error.localizedDescription)")
         }
     }
-    
+
     // MARK: - Display Enumeration
-    
+
     /// Get all available displays for capture
     func getAvailableDisplays() async -> [CaptureDisplay] {
         await refreshAvailableContent()
-        
+
         guard let displays = availableContent?.displays else {
             return []
         }
-        
+
         let screens = NSScreen.screens
-        
+
         return displays.compactMap { scDisplay -> CaptureDisplay? in
-            // Find matching NSScreen
             let matchingScreen = screens.first { screen in
                 let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
                 return screenNumber == scDisplay.displayID
             }
-            
+
             let isMain = CGDisplayIsMain(scDisplay.displayID) != 0
             let name = matchingScreen?.localizedName ?? "Display \(scDisplay.displayID)"
-            
+
             return CaptureDisplay(
                 id: scDisplay.displayID,
                 scDisplay: scDisplay,
                 screen: matchingScreen,
                 name: name,
                 isMain: isMain,
-                frame: CGRect(x: 0, y: 0, width: scDisplay.width, height: scDisplay.height)
+                frame: matchingScreen?.frame ?? CGRect(x: 0, y: 0, width: scDisplay.width, height: scDisplay.height)
             )
         }
     }
-    
+
     /// Get the display containing the mouse cursor
     func getDisplayAtCursor() async -> CaptureDisplay? {
         let mouseLocation = NSEvent.mouseLocation
         let displays = await getAvailableDisplays()
-        
-        // Find the screen containing the mouse
-        for screen in NSScreen.screens {
-            if screen.frame.contains(mouseLocation) {
-                return displays.first { $0.screen == screen }
-            }
+
+        for screen in NSScreen.screens where screen.frame.contains(mouseLocation) {
+            return displays.first { $0.screen == screen }
         }
-        
-        // Fallback to main display
+
         return displays.first { $0.isMain } ?? displays.first
     }
-    
+
     // MARK: - Fullscreen Capture
-    
+
     /// Capture the display at cursor position (default behavior)
-    func captureFullscreen() async -> NSImage? {
+    func captureFullscreen() async -> CaptureResult? {
         guard let display = await getDisplayAtCursor() else {
             logger.warning("No display available for fullscreen capture")
             return nil
         }
         return await captureDisplay(display)
     }
-    
+
     /// Capture a specific display
-    func captureDisplay(_ display: CaptureDisplay) async -> NSImage? {
+    func captureDisplay(_ display: CaptureDisplay) async -> CaptureResult? {
+        guard let cgImage = await captureDisplayCGImage(display) else {
+            return nil
+        }
+
+        let imageSize = display.screen?.frame.size ?? CGSize(width: display.scDisplay.width, height: display.scDisplay.height)
+        return CaptureResult(
+            image: NSImage(cgImage: cgImage, size: imageSize),
+            preferredScreen: display.screen
+        )
+    }
+
+    private func captureDisplayCGImage(_ display: CaptureDisplay) async -> CGImage? {
         let scaleFactor = display.scaleFactor
         let filter = SCContentFilter(display: display.scDisplay, excludingWindows: [])
         let config = SCStreamConfiguration()
-        
+
         config.width = Int(CGFloat(display.scDisplay.width) * scaleFactor)
         config.height = Int(CGFloat(display.scDisplay.height) * scaleFactor)
         config.scalesToFit = false
         config.showsCursor = false
-        
+
         do {
-            let image = try await SCScreenshotManager.captureImage(
+            return try await SCScreenshotManager.captureImage(
                 contentFilter: filter,
                 configuration: config
             )
-            return NSImage(cgImage: image, size: NSSize(width: display.scDisplay.width, height: display.scDisplay.height))
         } catch {
             logger.error("Failed to capture display: \(error.localizedDescription)")
             return nil
         }
     }
-    
+
     // MARK: - Area Capture
-    
-    func captureArea() async -> NSImage? {
-        // Show selection overlay and wait for user to select area (or window via Space)
+
+    func captureArea() async -> CaptureResult? {
         let result = await showAreaSelector()
-        
+
         switch result {
         case .area(let areaResult):
-            return await captureAreaOnDisplay(rect: areaResult.rect, display: areaResult.display)
+            return await captureArea(in: areaResult.globalRect)
         case .window(let window):
             return await captureWindow(window)
         case .cancelled:
             return nil
         }
     }
-    
-    /// Internal result type for area selector
+
     private enum AreaSelectorInternalResult {
         case area(AreaCaptureResult)
         case window(SCWindow)
         case cancelled
     }
-    
-    /// Capture a specific area on a specific display
-    func captureAreaOnDisplay(rect: CGRect, display: CaptureDisplay) async -> NSImage? {
-        let scaleFactor = display.scaleFactor
-        let filter = SCContentFilter(display: display.scDisplay, excludingWindows: [])
-        let config = SCStreamConfiguration()
-        
-        config.width = Int(CGFloat(display.scDisplay.width) * scaleFactor)
-        config.height = Int(CGFloat(display.scDisplay.height) * scaleFactor)
-        config.scalesToFit = false
-        config.showsCursor = false
-        
-        do {
-            let fullImage = try await SCScreenshotManager.captureImage(
-                contentFilter: filter,
-                configuration: config
-            )
-            
-            // Scale rect for display scale factor
-            let scaledRect = CGRect(
-                x: rect.origin.x * scaleFactor,
-                y: rect.origin.y * scaleFactor,
-                width: rect.width * scaleFactor,
-                height: rect.height * scaleFactor
-            )
-            
-            guard let croppedCGImage = fullImage.cropping(to: scaledRect) else {
-                logger.error("Failed to crop image to selected area")
-                return nil
-            }
-            
-            return NSImage(
-                cgImage: croppedCGImage,
-                size: NSSize(width: rect.width, height: rect.height)
-            )
-        } catch {
-            logger.error("Failed to capture area: \(error.localizedDescription)")
+
+    /// Capture an area in global Cocoa coordinates, potentially spanning multiple displays.
+    func captureArea(in globalRect: CGRect) async -> CaptureResult? {
+        let intersectingDisplays = await getAvailableDisplays().filter { display in
+            guard let screen = display.screen else { return false }
+            return screen.frame.intersects(globalRect)
+        }
+
+        guard !intersectingDisplays.isEmpty else {
+            logger.warning("No displays intersect the selected capture area")
             return nil
         }
+
+        var capturedDisplays: [(display: CaptureDisplay, image: CGImage)] = []
+        capturedDisplays.reserveCapacity(intersectingDisplays.count)
+
+        for display in intersectingDisplays {
+            guard let cgImage = await captureDisplayCGImage(display) else {
+                logger.error("Failed to capture display while composing area selection: \(display.name)")
+                return nil
+            }
+            capturedDisplays.append((display: display, image: cgImage))
+        }
+
+        guard let image = composeAreaCapture(from: capturedDisplays, selectionRect: globalRect) else {
+            logger.error("Failed to compose selected area across displays")
+            return nil
+        }
+
+        return CaptureResult(
+            image: image,
+            preferredScreen: preferredScreen(for: globalRect, displays: intersectingDisplays)
+        )
     }
-    
+
+    private func composeAreaCapture(
+        from displays: [(display: CaptureDisplay, image: CGImage)],
+        selectionRect: CGRect
+    ) -> NSImage? {
+        let maxScale = max(displays.map(\.display.scaleFactor).max() ?? 1.0, 1.0)
+        let pixelWidth = max(Int(ceil(selectionRect.width * maxScale)), 1)
+        let pixelHeight = max(Int(ceil(selectionRect.height * maxScale)), 1)
+
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelWidth,
+            pixelsHigh: pixelHeight,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            return nil
+        }
+
+        bitmap.size = selectionRect.size
+
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+
+        guard let graphicsContext = NSGraphicsContext(bitmapImageRep: bitmap) else {
+            return nil
+        }
+        NSGraphicsContext.current = graphicsContext
+        NSColor.clear.setFill()
+        NSBezierPath(rect: CGRect(origin: .zero, size: selectionRect.size)).fill()
+
+        for entry in displays {
+            guard let screenFrame = entry.display.screen?.frame else { continue }
+
+            let drawRect = CGRect(
+                x: screenFrame.minX - selectionRect.minX,
+                y: screenFrame.minY - selectionRect.minY,
+                width: screenFrame.width,
+                height: screenFrame.height
+            )
+
+            NSImage(cgImage: entry.image, size: screenFrame.size).draw(
+                in: drawRect,
+                from: .zero,
+                operation: .copy,
+                fraction: 1.0
+            )
+        }
+
+        let image = NSImage(size: selectionRect.size)
+        image.addRepresentation(bitmap)
+        return image
+    }
+
+    private func preferredScreen(for selectionRect: CGRect, displays: [CaptureDisplay]) -> NSScreen? {
+        let selectionCenter = CGPoint(x: selectionRect.midX, y: selectionRect.midY)
+
+        if let centeredDisplay = displays.first(where: { display in
+            display.screen?.frame.contains(selectionCenter) == true
+        }) {
+            return centeredDisplay.screen
+        }
+
+        return displays.first(where: \.isMain)?.screen ?? displays.first?.screen
+    }
+
     // MARK: - Window Capture
-    
+
     /// Get all capturable windows
     func getAvailableWindows() async -> [SCWindow] {
         await refreshAvailableContent()
@@ -210,30 +277,24 @@ class CaptureEngine {
 
         let ownBundleID = Bundle.main.bundleIdentifier
 
-        // Filter out system windows, own app windows, and tiny windows
         let filteredWindows = windows.filter { window in
-            // Must have owningApplication (filters out system artifacts)
             guard let app = window.owningApplication else {
                 return false
             }
 
-            // Exclude our own app's windows (overlays, preferences, etc.)
             if let ownID = ownBundleID, app.bundleIdentifier == ownID {
                 return false
             }
 
-            // Exclude Dock and Notification Center (system UI with misleading frames)
             let excludedBundles = ["com.apple.dock", "com.apple.notificationcenterui"]
             if excludedBundles.contains(app.bundleIdentifier) {
                 return false
             }
 
-            // Must have a reasonable size
             guard window.frame.width > 50 && window.frame.height > 50 else {
                 return false
             }
 
-            // Must have a title or be from a non-system app
             let hasTitle = window.title?.isEmpty == false
             let isSystemUI = app.bundleIdentifier.hasPrefix("com.apple.") && window.title == nil
 
@@ -241,86 +302,73 @@ class CaptureEngine {
         }
         return WindowOrdering.sortByZOrder(filteredWindows)
     }
-    
-    /// Capture a specific window
-    func captureWindow(_ window: SCWindow) async -> NSImage? {
-        // Find which screen contains the window center
-        let windowCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
 
-        // ScreenCaptureKit uses top-left origin, Cocoa uses bottom-left origin
-        // Convert SCK coordinates to Cocoa coordinates
+    /// Capture a specific window
+    func captureWindow(_ window: SCWindow) async -> CaptureResult? {
+        let windowCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
         let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
         let cocoaCenter = NSPoint(x: windowCenter.x, y: mainScreenHeight - windowCenter.y)
 
-        // Find the screen containing this point
         let containingScreen = NSScreen.screens.first { screen in
             screen.frame.contains(cocoaCenter)
         }
 
         let scaleFactor = containingScreen?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
-
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
-        
+
         config.width = Int(window.frame.width * scaleFactor)
         config.height = Int(window.frame.height * scaleFactor)
         config.scalesToFit = false
         config.showsCursor = false
         config.capturesShadowsOnly = false
         config.shouldBeOpaque = false
-        
+
         do {
             let image = try await SCScreenshotManager.captureImage(
                 contentFilter: filter,
                 configuration: config
             )
-            return NSImage(cgImage: image, size: NSSize(width: window.frame.width, height: window.frame.height))
+            return CaptureResult(
+                image: NSImage(cgImage: image, size: NSSize(width: window.frame.width, height: window.frame.height)),
+                preferredScreen: containingScreen
+            )
         } catch {
             logger.error("Failed to capture window: \(error.localizedDescription)")
             return nil
         }
     }
-    
+
     /// Show window picker and capture selected window
-    func captureWindowInteractive() async -> NSImage? {
+    func captureWindowInteractive() async -> CaptureResult? {
         guard let window = await showWindowSelector() else {
             return nil
         }
         return await captureWindow(window)
     }
-    
+
     // MARK: - Selectors
-    
+
     @MainActor
     private func showAreaSelector() async -> AreaSelectorInternalResult {
-        return await withCheckedContinuation { continuation in
+        await withCheckedContinuation { continuation in
             let selector = AreaSelectorWindow { [weak self] result in
-                // Release the selector now that we're done
                 self?.activeAreaSelector = nil
 
                 switch result {
-                case .area(let rect, let screen):
-                    // Find the matching CaptureDisplay
-                    Task {
-                        let allDisplays = await self?.getAvailableDisplays() ?? []
-                        if let display = allDisplays.first(where: { $0.screen == screen }) {
-                            continuation.resume(returning: .area(AreaCaptureResult(rect: rect, display: display)))
-                        } else {
-                            continuation.resume(returning: .cancelled)
-                        }
-                    }
+                case .area(let rect):
+                    continuation.resume(returning: .area(AreaCaptureResult(globalRect: rect)))
                 case .window(let window):
                     continuation.resume(returning: .window(window))
                 case .cancelled:
                     continuation.resume(returning: .cancelled)
                 }
             }
-            // Retain the selector to prevent deallocation
             self.activeAreaSelector = selector
             selector.show()
         }
     }
-    
+
     @MainActor
     private func showWindowSelector() async -> SCWindow? {
         await refreshAvailableContent()
@@ -328,11 +376,9 @@ class CaptureEngine {
 
         return await withCheckedContinuation { continuation in
             let selector = WindowSelectorController(windows: windows) { [weak self] window in
-                // Release the selector now that we're done
                 self?.activeWindowSelector = nil
                 continuation.resume(returning: window)
             }
-            // Retain the selector to prevent deallocation
             self.activeWindowSelector = selector
             selector.show()
         }

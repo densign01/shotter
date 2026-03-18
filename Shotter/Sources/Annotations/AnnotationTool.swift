@@ -98,9 +98,11 @@ class SelectTool: AnnotationTool {
     private var originalBounds: CGRect?
     private var draggedAnnotationId: AnnotationID?
     private var resizingHandle: ResizeHandlePosition?
+    private var hasSavedUndoState = false
     
     func mouseDown(at point: CGPoint, state: AnnotationEditorState) {
         dragStartPoint = point
+        hasSavedUndoState = false
         
         // Check if clicking on a resize handle of selected annotation
         if let selectedId = state.selectedAnnotationId,
@@ -137,6 +139,11 @@ class SelectTool: AnnotationTool {
         
         let dx = point.x - startPoint.x
         let dy = point.y - startPoint.y
+
+        if !hasSavedUndoState && (dx != 0 || dy != 0) {
+            state.saveUndoCheckpoint()
+            hasSavedUndoState = true
+        }
         
         if let handlePos = resizingHandle {
             // Resizing
@@ -192,6 +199,7 @@ class SelectTool: AnnotationTool {
         originalBounds = nil
         draggedAnnotationId = nil
         resizingHandle = nil
+        hasSavedUndoState = false
     }
 }
 

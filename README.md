@@ -28,17 +28,21 @@ A macOS screenshot utility inspired by CleanShot X.
 git clone https://github.com/densign01/shotter.git
 cd shotter
 
-# Build release
+# Build a release binary
 swift build -c release
 
-# Copy to app bundle
-cp .build/release/Shotter Shotter.app/Contents/MacOS/
+# The checked-in Shotter.app contains the bundle metadata only.
+# Create the executable folder, then drop the built binary into it.
+mkdir -p Shotter.app/Contents/MacOS
+cp .build/release/Shotter Shotter.app/Contents/MacOS/Shotter
 
-# Run
-./Shotter.app/Contents/MacOS/Shotter
+# Launch the local app bundle
+open Shotter.app
 ```
 
 On first run, macOS will prompt for **Screen Recording** and **Accessibility** permissions. Grant both in System Settings → Privacy & Security.
+
+If you want the prepackaged app bundle instead of assembling the local stub bundle, use [dist/Shotter.app](dist/Shotter.app).
 
 To quit: Click the camera icon in the menu bar → Quit, or `pkill -f Shotter.app`
 
