@@ -6,6 +6,38 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.7.0</title>
+      <pubDate>Tue, 18 Mar 2026 12:00:00 -0400</pubDate>
+      <sparkle:version>170</sparkle:version>
+      <sparkle:shortVersionString>1.7.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's Fixed in 1.7</h2>
+        <ul>
+          <li><strong>Hotkeys:</strong> No longer intercept Cmd-Shift-3/4/5 unless Screen Recording is available</li>
+          <li><strong>Hotkeys:</strong> Recover automatically after Accessibility is granted (no restart needed)</li>
+          <li><strong>Multi-display:</strong> Area capture now stitches selections spanning multiple monitors</li>
+          <li><strong>Retina:</strong> Crop coordinates correctly mapped to pixel space on Retina displays</li>
+          <li><strong>Undo:</strong> Move and resize operations now create undo checkpoints</li>
+          <li><strong>Highlighter:</strong> Moving a highlighter annotation now correctly translates the brush path</li>
+          <li><strong>Text editor:</strong> Overlay stays aligned when screenshot is letterboxed in the editor</li>
+          <li><strong>Multi-display:</strong> Overlay and annotation editor open on the monitor where the capture was taken</li>
+          <li><strong>Option key:</strong> Only triggers direct-copy when held as an extra modifier, not when part of a saved shortcut</li>
+          <li><strong>Copy:</strong> Copying from the annotation editor no longer silently writes a file for unsaved images</li>
+          <li><strong>Permissions:</strong> Alert now guides through both Screen Recording and Accessibility panes when both are missing</li>
+          <li><strong>Launch at login:</strong> State now syncs from OS; shows error if toggle fails</li>
+          <li><strong>Canvas:</strong> Clicking gray padding outside the image now clears annotation selection</li>
+          <li><strong>Accessibility:</strong> Color swatches and icon buttons now have VoiceOver labels</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.7.0/Shotter-1.7.0.dmg"
+        length="2986242"
+        type="application/octet-stream"
+        sparkle:edSignature="1av4LbYPpmVm+o30aYlBR2Ypgnbt9ESarmv509fhR+9/3SD9kcss9TQ32Th85BaERpOz5mswWu1qN/PzZYRBAg=="
+      />
+    </item>
+    <item>
       <title>Version 1.6.0</title>
       <pubDate>Thu, 06 Feb 2026 21:00:00 -0500</pubDate>
       <sparkle:version>160</sparkle:version>
