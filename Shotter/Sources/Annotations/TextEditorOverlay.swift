@@ -4,7 +4,7 @@ import SwiftUI
 /// A text field overlay for editing text annotations
 struct TextEditorOverlay: View {
     @ObservedObject var state: AnnotationEditorState
-    let canvasRect: CGRect
+    let imageRect: CGRect
     let scale: CGFloat
     
     @State private var editText: String = ""
@@ -68,8 +68,8 @@ struct TextEditorOverlay: View {
     
     private func convertToViewCoordinates(_ imageBounds: CGRect) -> CGRect {
         CGRect(
-            x: canvasRect.origin.x + imageBounds.origin.x * scale,
-            y: canvasRect.origin.y + imageBounds.origin.y * scale,
+            x: imageRect.origin.x + imageBounds.origin.x * scale,
+            y: imageRect.origin.y + imageBounds.origin.y * scale,
             width: imageBounds.width * scale,
             height: imageBounds.height * scale
         )

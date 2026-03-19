@@ -1,6 +1,33 @@
 import AppKit
 import SwiftUI
 
+func annotationImageRect(in viewSize: CGSize, imageSize: CGSize) -> CGRect {
+    guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
+
+    let imageAspect = imageSize.width / imageSize.height
+    let viewAspect = viewSize.width / viewSize.height
+
+    let scaledSize: CGSize
+    if imageAspect > viewAspect {
+        scaledSize = CGSize(
+            width: viewSize.width,
+            height: viewSize.width / imageAspect
+        )
+    } else {
+        scaledSize = CGSize(
+            width: viewSize.height * imageAspect,
+            height: viewSize.height
+        )
+    }
+
+    let origin = CGPoint(
+        x: (viewSize.width - scaledSize.width) / 2,
+        y: (viewSize.height - scaledSize.height) / 2
+    )
+
+    return CGRect(origin: origin, size: scaledSize)
+}
+
 /// NSView that handles the annotation canvas rendering and mouse events
 class AnnotationCanvasView: NSView {
     // Weak reference to avoid retaining state after window closes.
@@ -31,6 +58,15 @@ class AnnotationCanvasView: NSView {
     private func setupView() {
         wantsLayer = true
         layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+
+        guard window != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.focusCanvas()
+        }
     }
     
     override func updateTrackingAreas() {
@@ -124,39 +160,10 @@ class AnnotationCanvasView: NSView {
 
     private func imageRectInView() -> CGRect {
         guard let state = state else { return .zero }
-        
-        let imageSize = state.imageSize
-        let viewSize = bounds.size
-        
-        // Fit image to view while maintaining aspect ratio
-        let imageAspect = imageSize.width / imageSize.height
-        let viewAspect = viewSize.width / viewSize.height
-        
-        var scaledSize: CGSize
-        if imageAspect > viewAspect {
-            // Image is wider - fit to width
-            scaledSize = CGSize(
-                width: viewSize.width,
-                height: viewSize.width / imageAspect
-            )
-        } else {
-            // Image is taller - fit to height
-            scaledSize = CGSize(
-                width: viewSize.height * imageAspect,
-                height: viewSize.height
-            )
-        }
-        
-        // Center in view
-        let origin = CGPoint(
-            x: (viewSize.width - scaledSize.width) / 2,
-            y: (viewSize.height - scaledSize.height) / 2
-        )
-        
-        // Update scale factor
-        scale = scaledSize.width / imageSize.width
-        
-        return CGRect(origin: origin, size: scaledSize)
+
+        let imageRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
+        scale = imageRect.width / state.imageSize.width
+        return imageRect
     }
     
     private func drawCheckerboard(in rect: CGRect, context: CGContext) {
@@ -281,13 +288,19 @@ class AnnotationCanvasView: NSView {
     
     override func mouseDown(with event: NSEvent) {
         guard let state = state else { return }
+
+        focusCanvas()
         
         let viewPoint = convert(event.locationInWindow, from: nil)
         let imagePoint = viewPointToImagePoint(viewPoint)
         
         // Check if within image bounds
         let imageBounds = CGRect(origin: .zero, size: state.imageSize)
-        guard imageBounds.contains(imagePoint) else { return }
+        guard imageBounds.contains(imagePoint) else {
+            state.selectAnnotation(nil)
+            needsDisplay = true
+            return
+        }
         
         // Handle double-click for text editing
         if event.clickCount == 2 {
@@ -365,21 +378,47 @@ class AnnotationCanvasView: NSView {
     func refresh() {
         needsDisplay = true
     }
+
+    func focusCanvas() {
+        guard state?.editingTextAnnotationId == nil else { return }
+        window?.makeFirstResponder(self)
+    }
 }
 
 // MARK: - SwiftUI Wrapper
 
 struct AnnotationCanvasRepresentable: NSViewRepresentable {
     @ObservedObject var state: AnnotationEditorState
+
+    class Coordinator {
+        var lastFocusRequestID: Int
+
+        init(lastFocusRequestID: Int) {
+            self.lastFocusRequestID = lastFocusRequestID
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(lastFocusRequestID: state.canvasFocusRequestID)
+    }
     
     func makeNSView(context: Context) -> AnnotationCanvasView {
         let view = AnnotationCanvasView()
         view.state = state
+        DispatchQueue.main.async {
+            view.focusCanvas()
+        }
         return view
     }
     
     func updateNSView(_ nsView: AnnotationCanvasView, context: Context) {
         nsView.state = state
+        if context.coordinator.lastFocusRequestID != state.canvasFocusRequestID {
+            context.coordinator.lastFocusRequestID = state.canvasFocusRequestID
+            DispatchQueue.main.async {
+                nsView.focusCanvas()
+            }
+        }
         nsView.refresh()
     }
 }

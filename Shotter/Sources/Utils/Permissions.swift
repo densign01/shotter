@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import ScreenCaptureKit
 import os.log
 
@@ -17,6 +18,10 @@ struct Permissions {
     // MARK: - Screen Recording
 
     static func checkScreenRecording() async -> Bool {
+        if checkScreenRecordingSync() {
+            return true
+        }
+
         // Return cached value if recent
         if let cached = cachedScreenRecording,
            let lastCheck = lastScreenRecordingCheck,
@@ -36,13 +41,29 @@ struct Permissions {
             return false
         }
     }
+
+    static func checkScreenRecordingSync(forceRefresh: Bool = false) -> Bool {
+        if !forceRefresh,
+           let cached = cachedScreenRecording,
+           let lastCheck = lastScreenRecordingCheck,
+           Date().timeIntervalSince(lastCheck) < cacheInterval {
+            return cached
+        }
+
+        let result = CGPreflightScreenCaptureAccess()
+        cachedScreenRecording = result
+        lastScreenRecordingCheck = Date()
+        return result
+    }
     
     static func requestScreenRecording() async {
         // Try to access screen content - this will trigger the permission dialog
         _ = await checkScreenRecording()
-        
+
+        invalidateCache()
+
         // If still not granted, open System Preferences
-        if await !checkScreenRecording() {
+        if !checkScreenRecordingSync(forceRefresh: true) {
             await MainActor.run {
                 openSystemPreferences(privacy: "Privacy_ScreenCapture")
             }
@@ -71,6 +92,7 @@ struct Permissions {
         // This will show the permission prompt
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         AXIsProcessTrustedWithOptions(options)
+        invalidateCache()
     }
     
     // MARK: - Helpers

@@ -18,6 +18,7 @@ class OverlayController {
     func showOverlay(
         image: NSImage,
         savedURL: URL?,
+        preferredScreen: NSScreen?,
         onCopy: @escaping () -> Void,
         onSave: @escaping () -> Void,
         onAnnotate: @escaping () -> Void,
@@ -30,6 +31,7 @@ class OverlayController {
         overlayWindow = OverlayWindow(
             image: image,
             savedURL: savedURL,
+            preferredScreen: preferredScreen,
             onCopy: { [weak self] in
                 onCopy()
                 self?.dismissOverlay()
@@ -115,6 +117,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
     init(
         image: NSImage,
         savedURL: URL?,
+        preferredScreen: NSScreen?,
         onCopy: @escaping () -> Void,
         onSave: @escaping () -> Void,
         onAnnotate: @escaping () -> Void,
@@ -147,7 +150,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
         self.closeButtonRect = NSRect(x: 0, y: overlayHeight - 40, width: 40, height: 40)
 
         // Fixed size container; position above dock using visibleFrame
-        guard let screen = NSScreen.main else {
+        guard let screen = preferredScreen ?? NSScreen.main else {
             super.init(
                 contentRect: .zero,
                 styleMask: [.borderless, .nonactivatingPanel, .hudWindow],
@@ -170,11 +173,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
             // Right edge minus overlay width minus padding
             xOffset = visibleFrame.maxX - overlayWidth - padding
         } else {
-            // Bottom-left: check dock orientation for left-side dock
-            let dockOrientation = UserDefaults.standard.persistentDomain(forName: "com.apple.dock")?["orientation"] as? String ?? "bottom"
-            let dockOnLeft = dockOrientation == "left"
-            let dockReserve: CGFloat = 70
-            xOffset = dockOnLeft ? max(visibleFrame.minX + padding, dockReserve) : visibleFrame.minX + padding
+            xOffset = visibleFrame.minX + padding
         }
 
         let frame = NSRect(
@@ -442,17 +441,21 @@ struct OverlayView: View {
             VStack(spacing: OverlayLayout.actionButtonSpacing) {
                 OverlayActionButton(systemName: "doc.on.doc", action: onCopy)
                     .help("Copy")
+                    .accessibilityLabel(Text("Copy"))
                 // Show "Save" when no file exists, "Show in Finder" when file exists
                 OverlayActionButton(
                     systemName: hasSavedFile ? "folder" : "square.and.arrow.down",
                     action: onSave
                 )
                 .help(hasSavedFile ? "Show in Finder" : "Save")
+                .accessibilityLabel(Text(hasSavedFile ? "Show in Finder" : "Save"))
                 OverlayActionButton(systemName: "pencil.tip.crop.circle", action: onAnnotate)
                     .help("Annotate")
+                    .accessibilityLabel(Text("Annotate"))
                 // Show "Discard" when no file exists, "Move to Trash" when file exists
                 OverlayDeleteButton(action: onDelete)
                     .help(hasSavedFile ? "Move to Trash" : "Discard")
+                    .accessibilityLabel(Text(hasSavedFile ? "Move to Trash" : "Discard"))
             }
             .padding(OverlayLayout.actionBarInnerPadding)
             .background(ActiveVisualEffectView(material: .hudWindow))
@@ -471,6 +474,7 @@ struct OverlayView: View {
             .buttonStyle(.plain)
             .padding(10)
             .opacity(isHovering ? 1 : 0.6)
+            .accessibilityLabel(Text("Dismiss"))
         }
         .shadow(radius: 8)
         .onHover { hovering in

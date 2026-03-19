@@ -15,6 +15,7 @@ class AnnotationEditorWindow: NSWindow {
     init(
         image: NSImage,
         savedURL: URL?,
+        preferredScreen: NSScreen?,
         onSave: @escaping (NSImage) -> Void,
         onCancel: @escaping () -> Void,
         onClosed: @escaping () -> Void
@@ -26,7 +27,7 @@ class AnnotationEditorWindow: NSWindow {
         self.savedURL = savedURL
         
         // Calculate window size based on image
-        let screenFrame = NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1200, height: 800)
+        let screenFrame = preferredScreen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1200, height: 800)
         let maxWidth = screenFrame.width * 0.85
         let maxHeight = screenFrame.height * 0.85
         
@@ -137,16 +138,6 @@ class AnnotationEditorWindow: NSWindow {
         DebugLogger.log("Copy requested")
         guard let finalImage = state.renderFinalImage() else { return }
 
-        // Determine target file URL (use existing or generate new)
-        let targetURL: URL
-        if let url = savedURL {
-            targetURL = url
-        } else {
-            let saveDir = PreferencesManager.shared.saveLocation
-            try? FileManager.default.createDirectory(at: saveDir, withIntermediateDirectories: true)
-            targetURL = saveDir.appendingPathComponent(FileNaming.generateFilename())
-        }
-
         // Convert image to PNG data
         guard let tiffData = finalImage.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
@@ -155,15 +146,15 @@ class AnnotationEditorWindow: NSWindow {
             return
         }
 
-        // Try to save to disk (so we have a valid file URL for terminal apps)
-        var savedFileURL: URL? = nil
-        do {
-            try pngData.write(to: targetURL)
-            savedFileURL = targetURL
-            DebugLogger.log("Saved to \(targetURL.path) for clipboard")
-        } catch {
-            DebugLogger.log("Failed to save for clipboard: \(error.localizedDescription)")
-            // Continue anyway - we'll copy without the file URL
+        var savedFileURL = savedURL
+        if let targetURL = savedURL {
+            do {
+                try pngData.write(to: targetURL)
+                DebugLogger.log("Updated saved image at \(targetURL.path) before clipboard copy")
+            } catch {
+                DebugLogger.log("Failed to refresh saved image before clipboard copy: \(error.localizedDescription)")
+                savedFileURL = nil
+            }
         }
 
         // Copy to pasteboard with formats optimized for terminal apps (Ghostty, etc.)
@@ -244,6 +235,7 @@ class AnnotationEditorWindow: NSWindow {
         DebugLogger.log("Showing annotation editor window")
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        state.requestCanvasFocus()
     }
 
     private func closeProgrammatically() {
@@ -357,7 +349,7 @@ struct AnnotationEditorView: View {
                         if state.editingTextAnnotationId != nil {
                             TextEditorOverlay(
                                 state: state,
-                                canvasRect: geometry.frame(in: .local),
+                                imageRect: annotationImageRect(in: geometry.size, imageSize: state.imageSize),
                                 scale: calculateScale(for: geometry.size)
                             )
                         }
@@ -466,6 +458,9 @@ struct ToolButton: View {
             isHovered = hovering
         }
         .help(tool.tooltip)
+        .accessibilityLabel(Text(tool.rawValue))
+        .accessibilityHint(Text(tool.tooltip))
+        .accessibilityValue(Text(isSelected ? "Selected" : "Not selected"))
     }
 }
 
@@ -547,6 +542,7 @@ struct HoverIconButton: View {
             isHovered = hovering
         }
         .help(tooltip)
+        .accessibilityLabel(Text(tooltip))
     }
 
     private var backgroundColor: Color {
@@ -570,25 +566,27 @@ struct ColorSwatchButton: View {
     @State private var isHovered = false
 
     var body: some View {
-        Circle()
-            .fill(Color(color))
-            .frame(width: 22, height: 22)
-            .overlay(
-                // Selection ring
-                Circle()
-                    .stroke(Color.primary, lineWidth: isSelected ? 2 : 0)
-                    .frame(width: 26, height: 26)
-            )
-            .shadow(color: .black.opacity(isHovered ? 0.5 : 0), radius: isHovered ? 4 : 0, y: isHovered ? 2 : 0)
-            .scaleEffect(isHovered ? 1.15 : 1.0)
-            .animation(.easeInOut(duration: 0.15), value: isHovered)
-            .onHover { hovering in
-                isHovered = hovering
-            }
-            .onTapGesture {
-                action()
-            }
-            .help(colorName)
+        Button(action: action) {
+            Circle()
+                .fill(Color(color))
+                .frame(width: 22, height: 22)
+                .overlay(
+                    // Selection ring
+                    Circle()
+                        .stroke(Color.primary, lineWidth: isSelected ? 2 : 0)
+                        .frame(width: 26, height: 26)
+                )
+        }
+        .buttonStyle(.plain)
+        .shadow(color: .black.opacity(isHovered ? 0.5 : 0), radius: isHovered ? 4 : 0, y: isHovered ? 2 : 0)
+        .scaleEffect(isHovered ? 1.15 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .help(colorName)
+        .accessibilityLabel(Text(colorName))
+        .accessibilityValue(Text(isSelected ? "Selected" : "Not selected"))
     }
 }
 
@@ -784,6 +782,7 @@ struct ColorPickerButton: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text("Custom color"))
         .popover(isPresented: $showingPicker) {
             ColorGridPicker(selectedColor: selectedColor) { color in
                 onColorSelected(color)
@@ -841,5 +840,30 @@ struct ColorSwatch: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(color.accessibilityName))
+        .accessibilityValue(Text(isSelected ? "Selected" : "Not selected"))
+    }
+}
+
+private extension NSColor {
+    var accessibilityName: String {
+        switch self {
+        case .systemRed: return "Red"
+        case .systemOrange: return "Orange"
+        case .systemYellow: return "Yellow"
+        case .systemGreen: return "Green"
+        case .systemMint: return "Mint"
+        case .systemTeal: return "Teal"
+        case .systemCyan: return "Cyan"
+        case .systemBlue: return "Blue"
+        case .systemIndigo: return "Indigo"
+        case .systemPurple: return "Purple"
+        case .systemPink: return "Pink"
+        case .systemBrown: return "Brown"
+        case .black: return "Black"
+        case .darkGray: return "Dark Gray"
+        case .white: return "White"
+        default: return "Color"
+        }
     }
 }

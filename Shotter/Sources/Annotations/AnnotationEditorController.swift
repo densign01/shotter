@@ -17,6 +17,7 @@ class AnnotationEditorController {
     func openEditor(
         image: NSImage,
         savedURL: URL?,
+        preferredScreen: NSScreen?,
         onComplete: @escaping (NSImage) -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -29,6 +30,7 @@ class AnnotationEditorController {
         window = AnnotationEditorWindow(
             image: image,
             savedURL: savedURL,
+            preferredScreen: preferredScreen,
             onSave: { finalImage in
                 DebugLogger.log("Annotation editor onSave callback")
                 onComplete(finalImage)
