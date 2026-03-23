@@ -27,6 +27,13 @@ struct AreaCaptureResult {
 struct CaptureResult {
     let image: NSImage
     let preferredScreen: NSScreen?
+    let appName: String?
+
+    init(image: NSImage, preferredScreen: NSScreen?, appName: String? = nil) {
+        self.image = image
+        self.preferredScreen = preferredScreen
+        self.appName = appName
+    }
 }
 
 class CaptureEngine {
@@ -331,7 +338,8 @@ class CaptureEngine {
             )
             return CaptureResult(
                 image: NSImage(cgImage: image, size: NSSize(width: window.frame.width, height: window.frame.height)),
-                preferredScreen: containingScreen
+                preferredScreen: containingScreen,
+                appName: window.owningApplication?.applicationName
             )
         } catch {
             logger.error("Failed to capture window: \(error.localizedDescription)")

@@ -61,6 +61,23 @@ struct PreferencesView: View {
 
                 Toggle("Save screenshots automatically", isOn: $prefs.autoSaveScreenshots)
 
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Add timestamp overlay", isOn: $prefs.timestampOverlayEnabled)
+                    if prefs.timestampOverlayEnabled {
+                        HStack {
+                            Text("Position:")
+                            Spacer()
+                            Picker("", selection: $prefs.timestampOverlayPosition) {
+                                ForEach(TimestampPosition.allCases, id: \.self) { position in
+                                    Text(position.displayName).tag(position)
+                                }
+                            }
+                            .frame(width: 120)
+                        }
+                        .padding(.leading, 20)
+                    }
+                }
+
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
                 Text("General")

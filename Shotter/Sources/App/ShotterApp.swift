@@ -96,7 +96,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.warning("Failed to capture fullscreen")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy, appName: result.appName)
         }
     }
 
@@ -107,7 +107,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.info("Area capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy, appName: result.appName)
         }
     }
 
@@ -118,22 +118,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.info("Window capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy, appName: result.appName)
         }
     }
-    
+
     private func captureDisplay(_ display: CaptureDisplay) {
         Task {
             guard let result = await captureEngine?.captureDisplay(display) else {
                 logger.warning("Failed to capture display: \(display.name)")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, appName: result.appName)
         }
     }
     
-    private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) {
+    private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false, appName: String? = nil) {
         let prefs = PreferencesManager.shared
+
+        // Apply timestamp overlay if enabled
+        let processedImage: NSImage
+        if prefs.timestampOverlayEnabled {
+            processedImage = TimestampOverlay.apply(
+                to: image,
+                appName: appName,
+                position: prefs.timestampOverlayPosition
+            )
+        } else {
+            processedImage = image
+        }
 
         // Direct-copy mode: Option held + auto-copy is OFF → copy and skip overlay
         let shouldDirectCopy = directCopy && !prefs.autoCopyToClipboard
@@ -147,7 +159,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let result: Result<URL, SaveError>?
         let savedURL: URL?
         if prefs.autoSaveScreenshots {
-            result = saveImage(image)
+            result = saveImage(processedImage)
             savedURL = try? result?.get()
         } else {
             result = nil
@@ -158,7 +170,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Now includes file URL for terminal compatibility (Ghostty, etc.)
         if prefs.autoCopyToClipboard || shouldDirectCopy {
             DispatchQueue.main.async {
-                self.copyToClipboard(image, fileURL: savedURL)
+                self.copyToClipboard(processedImage, fileURL: savedURL)
             }
         }
 

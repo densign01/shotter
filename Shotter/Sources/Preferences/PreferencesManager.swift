@@ -19,6 +19,23 @@ enum OverlayPosition: String, CaseIterable {
     }
 }
 
+/// Position for the timestamp overlay on screenshots
+enum TimestampPosition: String, CaseIterable {
+    case topLeft = "topLeft"
+    case topRight = "topRight"
+    case bottomLeft = "bottomLeft"
+    case bottomRight = "bottomRight"
+
+    var displayName: String {
+        switch self {
+        case .topLeft: return "Top Left"
+        case .topRight: return "Top Right"
+        case .bottomLeft: return "Bottom Left"
+        case .bottomRight: return "Bottom Right"
+        }
+    }
+}
+
 /// Represents a keyboard shortcut configuration
 struct ShortcutConfig: Codable, Equatable {
     var keyCode: Int
@@ -96,6 +113,8 @@ class PreferencesManager: ObservableObject {
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
         static let overlayPosition = "overlayPosition"
+        static let timestampOverlayEnabled = "timestampOverlayEnabled"
+        static let timestampOverlayPosition = "timestampOverlayPosition"
     }
     
     @Published var saveLocation: URL {
@@ -167,6 +186,18 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    @Published var timestampOverlayEnabled: Bool {
+        didSet {
+            defaults.set(timestampOverlayEnabled, forKey: Keys.timestampOverlayEnabled)
+        }
+    }
+
+    @Published var timestampOverlayPosition: TimestampPosition {
+        didSet {
+            defaults.set(timestampOverlayPosition.rawValue, forKey: Keys.timestampOverlayPosition)
+        }
+    }
+
     private func saveShortcut(_ config: ShortcutConfig, forKey key: String) {
         if let data = try? JSONEncoder().encode(config) {
             defaults.set(data, forKey: key)
@@ -235,6 +266,17 @@ class PreferencesManager: ObservableObject {
             overlayPosition = position
         } else {
             overlayPosition = .bottomLeft
+        }
+
+        // Load timestamp overlay preference (default to false)
+        timestampOverlayEnabled = defaults.bool(forKey: Keys.timestampOverlayEnabled)
+
+        // Load timestamp position (default to bottom-right)
+        if let positionString = defaults.string(forKey: Keys.timestampOverlayPosition),
+           let position = TimestampPosition(rawValue: positionString) {
+            timestampOverlayPosition = position
+        } else {
+            timestampOverlayPosition = .bottomRight
         }
 
         defaults.set(actualLaunchAtLogin, forKey: Keys.launchAtLogin)
