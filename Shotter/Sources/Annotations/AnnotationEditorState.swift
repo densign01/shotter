@@ -17,6 +17,8 @@ class AnnotationEditorState: ObservableObject {
     @Published var nextCounterNumber: Int = 1
     @Published var cropRect: CGRect? = nil
     @Published private(set) var canvasFocusRequestID: Int = 0
+    @Published var zoomLevel: CGFloat = 1.0 // 1.0 = fit to window
+    @Published var scrollOffset: CGPoint = .zero
 
     // Modifier keys
     var isShiftKeyHeld: Bool = false
@@ -59,6 +61,29 @@ class AnnotationEditorState: ObservableObject {
         self.currentTool = AnnotationToolFactory.tool(for: .arrow)
     }
     
+    // MARK: - Zoom
+
+    static let zoomPresets: [CGFloat] = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]
+
+    func zoomIn() {
+        let nextLevel = Self.zoomPresets.first(where: { $0 > zoomLevel }) ?? zoomLevel
+        zoomLevel = nextLevel
+    }
+
+    func zoomOut() {
+        let prevLevel = Self.zoomPresets.last(where: { $0 < zoomLevel }) ?? zoomLevel
+        zoomLevel = prevLevel
+    }
+
+    func zoomToFit() {
+        zoomLevel = 1.0
+        scrollOffset = .zero
+    }
+
+    var zoomPercentage: Int {
+        Int(round(zoomLevel * 100))
+    }
+
     // MARK: - Tool Management
     
     func setTool(_ type: AnnotationToolType) {
@@ -430,6 +455,15 @@ extension AnnotationEditorState {
                 if selectedAnnotationId == nil, let first = annotations.first {
                     selectAnnotation(first.id)
                 }
+                return true
+            case "=", "+":
+                zoomIn()
+                return true
+            case "-":
+                zoomOut()
+                return true
+            case "0":
+                zoomToFit()
                 return true
             default:
                 break

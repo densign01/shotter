@@ -161,9 +161,27 @@ class AnnotationCanvasView: NSView {
     private func imageRectInView() -> CGRect {
         guard let state = state else { return .zero }
 
-        let imageRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
-        scale = imageRect.width / state.imageSize.width
-        return imageRect
+        // Base fit-to-window rect
+        let fitRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
+        let fitScale = fitRect.width / state.imageSize.width
+
+        if state.zoomLevel == 1.0 {
+            scale = fitScale
+            return fitRect
+        }
+
+        // Apply zoom relative to fit scale
+        let zoomedScale = fitScale * state.zoomLevel
+        scale = zoomedScale
+
+        let zoomedWidth = state.imageSize.width * zoomedScale
+        let zoomedHeight = state.imageSize.height * zoomedScale
+
+        // Center the zoomed image, offset by scroll
+        let originX = (bounds.width - zoomedWidth) / 2 + state.scrollOffset.x
+        let originY = (bounds.height - zoomedHeight) / 2 + state.scrollOffset.y
+
+        return CGRect(x: originX, y: originY, width: zoomedWidth, height: zoomedHeight)
     }
     
     private func drawCheckerboard(in rect: CGRect, context: CGContext) {
@@ -266,6 +284,33 @@ class AnnotationCanvasView: NSView {
         context.stroke(annotation.bounds)
     }
     
+    // MARK: - Scroll Wheel (Pan/Zoom)
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let state = state, state.zoomLevel > 1.0 else {
+            super.scrollWheel(with: event)
+            return
+        }
+
+        // If Cmd held, zoom in/out
+        if event.modifierFlags.contains(.command) {
+            if event.scrollingDeltaY > 0 {
+                state.zoomIn()
+            } else if event.scrollingDeltaY < 0 {
+                state.zoomOut()
+            }
+            needsDisplay = true
+            return
+        }
+
+        // Pan when zoomed
+        state.scrollOffset = CGPoint(
+            x: state.scrollOffset.x + event.scrollingDeltaX,
+            y: state.scrollOffset.y - event.scrollingDeltaY
+        )
+        needsDisplay = true
+    }
+
     // MARK: - Coordinate Conversion
     
     func viewPointToImagePoint(_ viewPoint: CGPoint) -> CGPoint {

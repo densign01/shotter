@@ -359,6 +359,8 @@ struct AnnotationEditorView: View {
                 // Bottom bar with tool options (always visible for consistent layout)
                 Divider()
                 ToolOptionsBar(state: state)
+                Divider()
+                ZoomControlsBar(state: state)
                 DragMeBar(state: state)
             }
             .background(Color(NSColor.controlBackgroundColor))
@@ -725,6 +727,57 @@ struct ToolOptionsBar: View {
         case .textHighlight:
             return "Drag to highlight"
         }
+    }
+}
+
+// MARK: - Zoom Controls Bar
+
+struct ZoomControlsBar: View {
+    @ObservedObject var state: AnnotationEditorState
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Zoom out button
+            Button(action: { state.zoomOut() }) {
+                Image(systemName: "minus.magnifyingglass")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .help("Zoom Out (\u{2318}-)")
+
+            // Zoom percentage dropdown
+            Menu {
+                ForEach(AnnotationEditorState.zoomPresets, id: \.self) { preset in
+                    Button("\(Int(preset * 100))%") {
+                        state.zoomLevel = preset
+                    }
+                }
+                Divider()
+                Button("Fit to Window") {
+                    state.zoomToFit()
+                }
+            } label: {
+                Text("\(state.zoomPercentage)%")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .frame(minWidth: 40)
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 60)
+
+            // Zoom in button
+            Button(action: { state.zoomIn() }) {
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .help("Zoom In (\u{2318}+)")
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 }
 
