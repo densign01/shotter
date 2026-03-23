@@ -8,6 +8,7 @@ struct PreferencesView: View {
         case fullscreen
         case area
         case window
+        case scrolling
     }
     
     var body: some View {
@@ -61,6 +62,23 @@ struct PreferencesView: View {
 
                 Toggle("Save screenshots automatically", isOn: $prefs.autoSaveScreenshots)
 
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Add timestamp overlay", isOn: $prefs.timestampOverlayEnabled)
+                    if prefs.timestampOverlayEnabled {
+                        HStack {
+                            Text("Position:")
+                            Spacer()
+                            Picker("", selection: $prefs.timestampOverlayPosition) {
+                                ForEach(TimestampPosition.allCases, id: \.self) { position in
+                                    Text(position.displayName).tag(position)
+                                }
+                            }
+                            .frame(width: 120)
+                        }
+                        .padding(.leading, 20)
+                    }
+                }
+
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
                 Text("General")
@@ -112,11 +130,20 @@ struct PreferencesView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
+                ShortcutRow(
+                    label: "Scrolling Capture",
+                    shortcut: $prefs.shortcutScrolling,
+                    isRecording: recordingShortcut == .scrolling,
+                    onStartRecording: { recordingShortcut = .scrolling },
+                    onStopRecording: { recordingShortcut = nil }
+                )
+
                 Button("Reset to Defaults") {
                     prefs.shortcutFullscreen = .defaultFullscreen
                     prefs.shortcutArea = .defaultArea
                     prefs.shortcutWindow = .defaultWindow
+                    prefs.shortcutScrolling = .defaultScrolling
                 }
                 .foregroundColor(.secondary)
             } header: {

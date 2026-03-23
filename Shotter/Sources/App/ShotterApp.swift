@@ -52,6 +52,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onCaptureFullscreen: { [weak self] in self?.captureFullscreen() },
             onCaptureArea: { [weak self] in self?.captureArea() },
             onCaptureWindow: { [weak self] in self?.captureWindow() },
+            onCaptureScrolling: { [weak self] in self?.captureScrolling() },
             onCaptureDisplay: { [weak self] display in self?.captureDisplay(display) },
             onOpenSaveFolder: { self.openSaveFolder() },
             onOpenPreferences: { self.openPreferences() },
@@ -64,7 +65,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager = HotkeyManager(
             onFullscreen: { [weak self] directCopy in self?.captureFullscreen(directCopy: directCopy) },
             onArea: { [weak self] directCopy in self?.captureArea(directCopy: directCopy) },
-            onWindow: { [weak self] directCopy in self?.captureWindow(directCopy: directCopy) }
+            onWindow: { [weak self] directCopy in self?.captureWindow(directCopy: directCopy) },
+            onScrolling: { [weak self] directCopy in self?.captureScrolling(directCopy: directCopy) }
         )
         
         // Check permissions on launch
@@ -96,7 +98,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.warning("Failed to capture fullscreen")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy, appName: result.appName)
         }
     }
 
@@ -107,7 +109,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.info("Area capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy, appName: result.appName)
         }
     }
 
@@ -118,22 +120,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.info("Window capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy, appName: result.appName)
         }
     }
-    
+
+    private func captureScrolling(directCopy: Bool = false) {
+        Task {
+            guard let result = await captureEngine?.captureScrolling() else {
+                logger.info("Scrolling capture returned nil (user cancelled or failed)")
+                return
+            }
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy, appName: result.appName)
+        }
+    }
+
     private func captureDisplay(_ display: CaptureDisplay) {
         Task {
             guard let result = await captureEngine?.captureDisplay(display) else {
                 logger.warning("Failed to capture display: \(display.name)")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen)
+            handleCapture(result.image, preferredScreen: result.preferredScreen, appName: result.appName)
         }
     }
     
-    private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) {
+    private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false, appName: String? = nil) {
         let prefs = PreferencesManager.shared
+
+        // Apply timestamp overlay if enabled
+        let processedImage: NSImage
+        if prefs.timestampOverlayEnabled {
+            processedImage = TimestampOverlay.apply(
+                to: image,
+                appName: appName,
+                position: prefs.timestampOverlayPosition
+            )
+        } else {
+            processedImage = image
+        }
 
         // Direct-copy mode: Option held + auto-copy is OFF → copy and skip overlay
         let shouldDirectCopy = directCopy && !prefs.autoCopyToClipboard
@@ -147,7 +171,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let result: Result<URL, SaveError>?
         let savedURL: URL?
         if prefs.autoSaveScreenshots {
-            result = saveImage(image)
+            result = saveImage(processedImage)
             savedURL = try? result?.get()
         } else {
             result = nil
@@ -158,7 +182,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Now includes file URL for terminal compatibility (Ghostty, etc.)
         if prefs.autoCopyToClipboard || shouldDirectCopy {
             DispatchQueue.main.async {
-                self.copyToClipboard(image, fileURL: savedURL)
+                self.copyToClipboard(processedImage, fileURL: savedURL)
             }
         }
 
@@ -172,7 +196,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             // When auto-save is disabled (no result), show overlay with save functionality
             if result == nil {
-                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen)
+                self.showOverlayWithManualSave(image: processedImage, preferredScreen: preferredScreen)
                 return
             }
 
@@ -180,11 +204,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             switch result! {
             case .success(let savedURL):
                 self.overlayController?.showOverlay(
-                    image: image,
+                    image: processedImage,
                     savedURL: savedURL,
                     preferredScreen: preferredScreen,
                     onCopy: {
-                        self.copyToClipboard(image, fileURL: savedURL)
+                        self.copyToClipboard(processedImage, fileURL: savedURL)
                     },
                     onSave: {
                         NSWorkspace.shared.activateFileViewerSelecting([savedURL])
@@ -192,7 +216,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     onAnnotate: {
                         DebugLogger.log("Overlay annotate clicked (savedURL available)")
                         self.overlayController?.dismissOverlay()
-                        self.openAnnotationEditor(image: image, savedURL: savedURL, preferredScreen: preferredScreen)
+                        self.openAnnotationEditor(image: processedImage, savedURL: savedURL, preferredScreen: preferredScreen)
                     },
                     onDelete: {
                         self.moveToTrash(savedURL)
@@ -201,7 +225,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .failure(let error):
                 self.showSaveErrorAlert(error: error)
                 // Auto-save failed - show overlay with manual save option to retry
-                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen)
+                self.showOverlayWithManualSave(image: processedImage, preferredScreen: preferredScreen)
             }
         }
     }

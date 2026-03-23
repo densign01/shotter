@@ -19,6 +19,23 @@ enum OverlayPosition: String, CaseIterable {
     }
 }
 
+/// Position for the timestamp overlay on captured images
+enum TimestampPosition: String, CaseIterable {
+    case topLeft = "topLeft"
+    case topRight = "topRight"
+    case bottomLeft = "bottomLeft"
+    case bottomRight = "bottomRight"
+
+    var displayName: String {
+        switch self {
+        case .topLeft: return "Top Left"
+        case .topRight: return "Top Right"
+        case .bottomLeft: return "Bottom Left"
+        case .bottomRight: return "Bottom Right"
+        }
+    }
+}
+
 /// Represents a keyboard shortcut configuration
 struct ShortcutConfig: Codable, Equatable {
     var keyCode: Int
@@ -77,6 +94,13 @@ struct ShortcutConfig: Codable, Equatable {
         modifiers: Int(CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue),
         isEnabled: false  // Disabled by default; users can enable if they want direct window shortcut
     )
+
+    /// Default ⌘⇧6 for scrolling capture
+    static let defaultScrolling = ShortcutConfig(
+        keyCode: 22,  // "6"
+        modifiers: Int(CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue),
+        isEnabled: true
+    )
 }
 
 class PreferencesManager: ObservableObject {
@@ -95,7 +119,10 @@ class PreferencesManager: ObservableObject {
         static let shortcutFullscreen = "shortcutFullscreen"
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
+        static let shortcutScrolling = "shortcutScrolling"
         static let overlayPosition = "overlayPosition"
+        static let timestampOverlayEnabled = "timestampOverlayEnabled"
+        static let timestampOverlayPosition = "timestampOverlayPosition"
     }
     
     @Published var saveLocation: URL {
@@ -161,9 +188,28 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    @Published var shortcutScrolling: ShortcutConfig {
+        didSet {
+            saveShortcut(shortcutScrolling, forKey: Keys.shortcutScrolling)
+            NotificationCenter.default.post(name: .shortcutsDidChange, object: nil)
+        }
+    }
+
     @Published var overlayPosition: OverlayPosition {
         didSet {
             defaults.set(overlayPosition.rawValue, forKey: Keys.overlayPosition)
+        }
+    }
+
+    @Published var timestampOverlayEnabled: Bool {
+        didSet {
+            defaults.set(timestampOverlayEnabled, forKey: Keys.timestampOverlayEnabled)
+        }
+    }
+
+    @Published var timestampOverlayPosition: TimestampPosition {
+        didSet {
+            defaults.set(timestampOverlayPosition.rawValue, forKey: Keys.timestampOverlayPosition)
         }
     }
 
@@ -228,6 +274,7 @@ class PreferencesManager: ObservableObject {
         shortcutFullscreen = Self.loadShortcut(from: defaults, forKey: Keys.shortcutFullscreen, default: .defaultFullscreen)
         shortcutArea = Self.loadShortcut(from: defaults, forKey: Keys.shortcutArea, default: .defaultArea)
         shortcutWindow = Self.loadShortcut(from: defaults, forKey: Keys.shortcutWindow, default: .defaultWindow)
+        shortcutScrolling = Self.loadShortcut(from: defaults, forKey: Keys.shortcutScrolling, default: .defaultScrolling)
 
         // Load overlay position (default to bottom-left)
         if let positionString = defaults.string(forKey: Keys.overlayPosition),
@@ -235,6 +282,17 @@ class PreferencesManager: ObservableObject {
             overlayPosition = position
         } else {
             overlayPosition = .bottomLeft
+        }
+
+        // Load timestamp overlay preference (default to false)
+        timestampOverlayEnabled = defaults.bool(forKey: Keys.timestampOverlayEnabled)
+
+        // Load timestamp position (default to bottom-right)
+        if let positionString = defaults.string(forKey: Keys.timestampOverlayPosition),
+           let position = TimestampPosition(rawValue: positionString) {
+            timestampOverlayPosition = position
+        } else {
+            timestampOverlayPosition = .bottomRight
         }
 
         defaults.set(actualLaunchAtLogin, forKey: Keys.launchAtLogin)

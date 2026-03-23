@@ -27,6 +27,13 @@ struct AreaCaptureResult {
 struct CaptureResult {
     let image: NSImage
     let preferredScreen: NSScreen?
+    let appName: String?
+
+    init(image: NSImage, preferredScreen: NSScreen?, appName: String? = nil) {
+        self.image = image
+        self.preferredScreen = preferredScreen
+        self.appName = appName
+    }
 }
 
 class CaptureEngine {
@@ -331,7 +338,8 @@ class CaptureEngine {
             )
             return CaptureResult(
                 image: NSImage(cgImage: image, size: NSSize(width: window.frame.width, height: window.frame.height)),
-                preferredScreen: containingScreen
+                preferredScreen: containingScreen,
+                appName: window.owningApplication?.applicationName
             )
         } catch {
             logger.error("Failed to capture window: \(error.localizedDescription)")
@@ -345,6 +353,50 @@ class CaptureEngine {
             return nil
         }
         return await captureWindow(window)
+    }
+
+    // MARK: - Scrolling Capture
+
+    /// Capture a scrolling/full-page screenshot of a window
+    func captureScrolling() async -> CaptureResult? {
+        // First, let user select a window via the window selector
+        guard let window = await showWindowSelector() else {
+            return nil
+        }
+
+        // Get the click point (center of window in ScreenCaptureKit coordinates)
+        let clickPoint = CGPoint(
+            x: window.frame.midX,
+            y: window.frame.midY
+        )
+
+        let selection = WindowSelectionResult(window: window, clickPoint: clickPoint)
+
+        let session = ScrollingCaptureSession(
+            selection: selection,
+            captureWindow: { [weak self] scWindow -> NSImage? in
+                guard let result = await self?.captureWindow(scWindow) else {
+                    return nil
+                }
+                return result.image
+            }
+        )
+
+        guard let image = await session.capture() else {
+            return nil
+        }
+
+        // Determine which screen the window is on
+        let windowCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
+        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
+        let cocoaCenter = NSPoint(x: windowCenter.x, y: mainScreenHeight - windowCenter.y)
+        let containingScreen = NSScreen.screens.first { $0.frame.contains(cocoaCenter) }
+
+        return CaptureResult(
+            image: image,
+            preferredScreen: containingScreen,
+            appName: window.owningApplication?.applicationName
+        )
     }
 
     // MARK: - Selectors
