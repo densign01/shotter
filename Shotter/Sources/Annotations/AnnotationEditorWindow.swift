@@ -385,7 +385,9 @@ struct AnnotationToolbar: View {
     let onSave: () -> Void
     let onCopy: () -> Void
     let onCancel: () -> Void
-    
+
+    @State private var showBackgroundPanel = false
+
     var body: some View {
         HStack(spacing: 12) {
             // Tool buttons
@@ -404,9 +406,17 @@ struct AnnotationToolbar: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(NSColor.controlBackgroundColor))
             )
-            
+
+            // Background button
+            HoverIconButton(icon: "rectangle.inset.filled", tooltip: "Background") {
+                showBackgroundPanel.toggle()
+            }
+            .popover(isPresented: $showBackgroundPanel) {
+                BackgroundPanel(state: state)
+            }
+
             Spacer()
-            
+
             // Undo/Redo
             HStack(spacing: 4) {
                 HoverIconButton(icon: "arrow.uturn.backward", tooltip: "Undo (⌘Z)", action: { state.undo() })
@@ -552,6 +562,139 @@ struct HoverIconButton: View {
             return Color.gray.opacity(0.2)
         }
         return Color.clear
+    }
+}
+
+// MARK: - Background Panel
+
+struct BackgroundPanel: View {
+    @ObservedObject var state: AnnotationEditorState
+
+    private let presets: [(String, BackgroundStyle)] = [
+        ("None", .none),
+        ("White", .solid(.white)),
+        ("Dark", .solid(NSColor(white: 0.1, alpha: 1))),
+        ("Blue Gradient", .gradient(.systemBlue, .systemPurple, .diagonal)),
+        ("Sunset", .gradient(.systemOrange, .systemPink, .diagonal)),
+        ("Ocean", .gradient(.systemTeal, .systemBlue, .vertical)),
+        ("Forest", .gradient(.systemGreen, .systemTeal, .diagonal)),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Background")
+                .font(.headline)
+
+            // Preset grid
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 44))], spacing: 8) {
+                ForEach(presets.indices, id: \.self) { index in
+                    let preset = presets[index]
+                    BackgroundPresetSwatch(
+                        name: preset.0,
+                        style: preset.1,
+                        isSelected: state.backgroundConfig.style == preset.1
+                    ) {
+                        state.backgroundConfig.style = preset.1
+                    }
+                }
+            }
+
+            Divider()
+
+            // Padding slider
+            HStack {
+                Text("Padding")
+                    .frame(width: 55, alignment: .leading)
+                Slider(value: $state.backgroundConfig.padding, in: 20...120)
+                Text("\(Int(state.backgroundConfig.padding))")
+                    .frame(width: 30, alignment: .trailing)
+                    .monospacedDigit()
+            }
+
+            // Corner radius slider
+            HStack {
+                Text("Corners")
+                    .frame(width: 55, alignment: .leading)
+                Slider(value: $state.backgroundConfig.cornerRadius, in: 0...32)
+                Text("\(Int(state.backgroundConfig.cornerRadius))")
+                    .frame(width: 30, alignment: .trailing)
+                    .monospacedDigit()
+            }
+
+            // Shadow toggle
+            Toggle("Shadow", isOn: $state.backgroundConfig.shadowEnabled)
+        }
+        .padding()
+        .frame(width: 240)
+    }
+}
+
+struct BackgroundPresetSwatch: View {
+    let name: String
+    let style: BackgroundStyle
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(swatchFill)
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Group {
+                        if style == .none {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isSelected ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: isSelected ? 2 : 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered ? 1.1 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .help(name)
+        .accessibilityLabel(Text(name))
+        .accessibilityValue(Text(isSelected ? "Selected" : "Not selected"))
+    }
+
+    private var swatchFill: some ShapeStyle {
+        switch style {
+        case .none:
+            return AnyShapeStyle(Color(NSColor.controlBackgroundColor))
+        case .solid(let color):
+            return AnyShapeStyle(Color(color))
+        case .gradient(let start, let end, let direction):
+            let startPoint: UnitPoint
+            let endPoint: UnitPoint
+            switch direction {
+            case .horizontal:
+                startPoint = .leading
+                endPoint = .trailing
+            case .vertical:
+                startPoint = .top
+                endPoint = .bottom
+            case .diagonal:
+                startPoint = .topLeading
+                endPoint = .bottomTrailing
+            }
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [Color(start), Color(end)],
+                    startPoint: startPoint,
+                    endPoint: endPoint
+                )
+            )
+        }
     }
 }
 

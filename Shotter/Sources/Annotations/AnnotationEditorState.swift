@@ -16,6 +16,7 @@ class AnnotationEditorState: ObservableObject {
     @Published var editingTextAnnotationId: AnnotationID?
     @Published var nextCounterNumber: Int = 1
     @Published var cropRect: CGRect? = nil
+    @Published var backgroundConfig: BackgroundConfig = BackgroundConfig()
     @Published private(set) var canvasFocusRequestID: Int = 0
 
     // Modifier keys
@@ -39,9 +40,11 @@ class AnnotationEditorState: ObservableObject {
     private(set) var imageSize: CGSize
     private(set) var hasBeenCropped: Bool = false
 
+    var hasBackground: Bool { backgroundConfig.style != .none }
+
     /// Whether the editor has changes worth prompting about on close
     var hasUnsavedChanges: Bool {
-        !annotations.isEmpty || hasBeenCropped
+        !annotations.isEmpty || hasBeenCropped || hasBackground
     }
 
     // Cached CIContext for blur operations (expensive to create)
@@ -367,9 +370,15 @@ class AnnotationEditorState: ObservableObject {
         }
         
         image.unlockFocus()
+
+        // Apply background if configured
+        if backgroundConfig.style != .none {
+            return BackgroundRenderer.render(screenshot: image, config: backgroundConfig)
+        }
+
         return image
     }
-    
+
     private func applyBlur(_ blur: BlurAnnotation, in context: CGContext, imageSize: CGSize) {
         // Clip to blur bounds
         context.saveGState()
