@@ -143,11 +143,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             SoundManager.shared.playCaptureSound()
         }
 
+        // Generate smart filename if enabled (async), then proceed with save
+        if prefs.smartNamingEnabled && prefs.autoSaveScreenshots {
+            Task {
+                let filename = await SmartNaming.generateSmartFilename(from: image)
+                await MainActor.run {
+                    self.completeCapture(image: image, preferredScreen: preferredScreen, directCopy: directCopy, shouldDirectCopy: shouldDirectCopy, smartFilename: filename)
+                }
+            }
+            return
+        }
+
+        completeCapture(image: image, preferredScreen: preferredScreen, directCopy: directCopy, shouldDirectCopy: shouldDirectCopy, smartFilename: nil)
+    }
+
+    private func completeCapture(image: NSImage, preferredScreen: NSScreen?, directCopy: Bool, shouldDirectCopy: Bool, smartFilename: String?) {
+        let prefs = PreferencesManager.shared
+
         // Only save immediately if auto-save is enabled
         let result: Result<URL, SaveError>?
         let savedURL: URL?
         if prefs.autoSaveScreenshots {
-            result = saveImage(image)
+            result = saveImage(image, filename: smartFilename)
             savedURL = try? result?.get()
         } else {
             result = nil
@@ -216,14 +233,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.copyToClipboard(image, fileURL: nil)
             },
             onSave: {
-                // Manual save: save the file, then dismiss overlay
-                let result = self.saveImage(image)
-                switch result {
-                case .success(let url):
-                    logger.info("Manual save completed: \(url.path)")
-                    self.overlayController?.dismissOverlay()
-                case .failure(let error):
-                    self.showSaveErrorAlert(error: error)
+                // Manual save: generate smart filename if enabled, then save
+                if PreferencesManager.shared.smartNamingEnabled {
+                    Task {
+                        let filename = await SmartNaming.generateSmartFilename(from: image)
+                        await MainActor.run {
+                            let result = self.saveImage(image, filename: filename)
+                            switch result {
+                            case .success(let url):
+                                logger.info("Manual save completed: \(url.path)")
+                                self.overlayController?.dismissOverlay()
+                            case .failure(let error):
+                                self.showSaveErrorAlert(error: error)
+                            }
+                        }
+                    }
+                } else {
+                    let result = self.saveImage(image)
+                    switch result {
+                    case .success(let url):
+                        logger.info("Manual save completed: \(url.path)")
+                        self.overlayController?.dismissOverlay()
+                    case .failure(let error):
+                        self.showSaveErrorAlert(error: error)
+                    }
                 }
             },
             onAnnotate: {
@@ -256,10 +289,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func saveImage(_ image: NSImage) -> Result<URL, SaveError> {
+    private func saveImage(_ image: NSImage, filename: String? = nil) -> Result<URL, SaveError> {
         let saveFolder = PreferencesManager.shared.saveLocation
-        let filename = FileNaming.generateFilename()
-        let fileURL = saveFolder.appendingPathComponent(filename)
+        let resolvedFilename = filename ?? FileNaming.generateFilename()
+        let fileURL = saveFolder.appendingPathComponent(resolvedFilename)
         
         // Ensure directory exists
         do {
