@@ -16,6 +16,7 @@ class AnnotationEditorState: ObservableObject {
     @Published var editingTextAnnotationId: AnnotationID?
     @Published var nextCounterNumber: Int = 1
     @Published var cropRect: CGRect? = nil
+    @Published var mockupConfig: MockupConfig = MockupConfig()
     @Published private(set) var canvasFocusRequestID: Int = 0
 
     // Modifier keys
@@ -367,9 +368,15 @@ class AnnotationEditorState: ObservableObject {
         }
         
         image.unlockFocus()
+
+        // Apply device mockup frame
+        if mockupConfig.type != .none {
+            return DeviceMockupRenderer.render(screenshot: image, config: mockupConfig)
+        }
+
         return image
     }
-    
+
     private func applyBlur(_ blur: BlurAnnotation, in context: CGContext, imageSize: CGSize) {
         // Clip to blur bounds
         context.saveGState()

@@ -419,6 +419,12 @@ struct AnnotationToolbar: View {
             Divider()
                 .frame(height: 24)
 
+            // Device mockup
+            MockupButton(state: state)
+
+            Divider()
+                .frame(height: 24)
+
             // Action buttons (icon-only for compact layout)
             HStack(spacing: 4) {
                 HoverIconButton(icon: "xmark", tooltip: "Cancel (Esc)", action: onCancel)
@@ -552,6 +558,56 @@ struct HoverIconButton: View {
             return Color.gray.opacity(0.2)
         }
         return Color.clear
+    }
+}
+
+// MARK: - Mockup Button
+
+struct MockupButton: View {
+    @ObservedObject var state: AnnotationEditorState
+    @State private var showingPopover = false
+
+    var body: some View {
+        HoverIconButton(
+            icon: "macwindow",
+            tooltip: "Device Frame",
+            isPrimary: state.mockupConfig.type != .none
+        ) {
+            showingPopover.toggle()
+        }
+        .popover(isPresented: $showingPopover) {
+            MockupPanel(state: state)
+        }
+    }
+}
+
+struct MockupPanel: View {
+    @ObservedObject var state: AnnotationEditorState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Device Frame").font(.headline)
+
+            ForEach(MockupType.allCases) { type in
+                Button(action: { state.mockupConfig.type = type }) {
+                    HStack {
+                        Text(type.rawValue)
+                        Spacer()
+                        if state.mockupConfig.type == type {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+
+            if state.mockupConfig.type != .none {
+                Divider()
+                Toggle("Dark Mode", isOn: $state.mockupConfig.darkMode)
+            }
+        }
+        .padding()
+        .frame(width: 200)
     }
 }
 
