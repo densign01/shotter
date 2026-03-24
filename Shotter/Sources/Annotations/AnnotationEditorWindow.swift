@@ -406,7 +406,23 @@ struct AnnotationToolbar: View {
             )
             
             Spacer()
-            
+
+            // Auto-Redact
+            HoverIconButton(
+                icon: "shield.lefthalf.filled",
+                tooltip: "Auto-redact sensitive information"
+            ) {
+                Task {
+                    state.isDetectingRedactions = true
+                    await state.autoRedact()
+                    state.isDetectingRedactions = false
+                }
+            }
+            .disabled(state.isDetectingRedactions)
+
+            Divider()
+                .frame(height: 24)
+
             // Undo/Redo
             HStack(spacing: 4) {
                 HoverIconButton(icon: "arrow.uturn.backward", tooltip: "Undo (⌘Z)", action: { state.undo() })

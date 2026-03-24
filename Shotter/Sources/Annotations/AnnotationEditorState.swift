@@ -17,6 +17,7 @@ class AnnotationEditorState: ObservableObject {
     @Published var nextCounterNumber: Int = 1
     @Published var cropRect: CGRect? = nil
     @Published private(set) var canvasFocusRequestID: Int = 0
+    @Published var isDetectingRedactions: Bool = false
 
     // Modifier keys
     var isShiftKeyHeld: Bool = false
@@ -333,6 +334,23 @@ class AnnotationEditorState: ObservableObject {
     func cancelCrop() {
         cropRect = nil
         setTool(.select)
+    }
+
+    // MARK: - Auto-Redact
+
+    func autoRedact() async {
+        let regions = await AutoRedact.detectSensitiveRegions(in: baseImage)
+        for region in regions {
+            // Convert Vision normalized coords (origin bottom-left) to image coords (origin top-left)
+            let imageRect = CGRect(
+                x: region.boundingBox.origin.x * imageSize.width,
+                y: (1 - region.boundingBox.origin.y - region.boundingBox.height) * imageSize.height,
+                width: region.boundingBox.width * imageSize.width,
+                height: region.boundingBox.height * imageSize.height
+            )
+            let blur = BlurAnnotation(bounds: imageRect, blurRadius: 20)
+            addAnnotation(blur)
+        }
     }
 
     // MARK: - Rendering
