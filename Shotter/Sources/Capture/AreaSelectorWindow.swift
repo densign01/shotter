@@ -57,9 +57,9 @@ class AreaSelectorWindow {
     private var hasCompleted = false
     private var localKeyMonitor: Any?
     
-    init(completion: @escaping (AreaSelectorResult) -> Void) {
+    init(screenCaptures: [(screen: NSScreen, image: CGImage)], completion: @escaping (AreaSelectorResult) -> Void) {
         self.completion = completion
-        
+
         // Create coordinator to sync selection state across screens
         coordinator = AreaSelectionCoordinator()
         coordinator?.onAreaComplete = { [weak self] rect in
@@ -71,15 +71,17 @@ class AreaSelectorWindow {
         coordinator?.onCancel = { [weak self] in
             self?.handleCancel()
         }
-        
+
         // Pre-fetch available windows for window mode
         Task {
             await coordinator?.loadWindows()
         }
-        
-        // Create an overlay window for each screen
+
+        // Create an overlay window for each screen, matching frozen captures by frame origin
         for screen in NSScreen.screens {
-            let window = AreaOverlayWindow(screen: screen, coordinator: coordinator!)
+            // Find the frozen capture for this screen by matching frame origin
+            let frozenImage = screenCaptures.first(where: { $0.screen.frame.origin == screen.frame.origin })?.image
+            let window = AreaOverlayWindow(screen: screen, coordinator: coordinator!, frozenImage: frozenImage)
             overlayWindows.append(window)
         }
     }
@@ -349,7 +351,7 @@ class AreaOverlayWindow: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    init(screen: NSScreen, coordinator: AreaSelectionCoordinator) {
+    init(screen: NSScreen, coordinator: AreaSelectionCoordinator, frozenImage: CGImage?) {
         self.coordinator = coordinator
         self.associatedScreen = screen
 
@@ -374,39 +376,52 @@ class AreaOverlayWindow: NSPanel {
 
         // Create selection view - use local bounds (0,0 origin), not screen coordinates
         let viewFrame = NSRect(origin: .zero, size: screen.frame.size)
-        let view = AreaSelectionView(frame: viewFrame, screen: screen, coordinator: coordinator)
+        let view = AreaSelectionView(frame: viewFrame, screen: screen, coordinator: coordinator, frozenImage: frozenImage)
         coordinator.views.append(view)
         selectionView = view
         self.contentView = view
     }
 
     func show() {
+        self.alphaValue = 0
         self.orderFrontRegardless()
+        self.selectionView?.display()  // Force synchronous draw before showing
+        self.alphaValue = 1
     }
 
-    /// Handle Escape key to cancel selection (prevents default app behavior)
+    /// Ignore cancelOperation — Escape is handled by the CGEvent tap and local key monitor.
+    /// The default cancelOperation fires during app deactivation (e.g. menu bar clicks),
+    /// which would incorrectly dismiss the overlay.
     override func cancelOperation(_ sender: Any?) {
-        coordinator?.cancel()
+        // Intentionally empty
     }
 }
 
 class AreaSelectionView: NSView {
     private weak var coordinator: AreaSelectionCoordinator?
     private let screen: NSScreen
-    
+    private let frozenImage: NSImage?
+
     private var dimensionLabel: NSTextField?
     private var trackingArea: NSTrackingArea?
-    
+
     override var acceptsFirstResponder: Bool { true }
 
     // Accept mouse events without requiring window activation first
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    init(frame: NSRect, screen: NSScreen, coordinator: AreaSelectionCoordinator) {
+    init(frame: NSRect, screen: NSScreen, coordinator: AreaSelectionCoordinator, frozenImage: CGImage?) {
         self.screen = screen
         self.coordinator = coordinator
+        // Convert CGImage to NSImage sized to the screen's point dimensions
+        if let cgImage = frozenImage {
+            let nsImage = NSImage(cgImage: cgImage, size: frame.size)
+            self.frozenImage = nsImage
+        } else {
+            self.frozenImage = nil
+        }
         super.init(frame: frame)
-        
+
         // Set up tracking area for mouse moved events
         updateTrackingArea()
     }
@@ -432,9 +447,8 @@ class AreaSelectionView: NSView {
     
     override func draw(_ dirtyRect: NSRect) {
         guard let coordinator = coordinator else {
-            // Fallback: just draw dim overlay
-            NSColor.black.withAlphaComponent(0.3).setFill()
-            bounds.fill()
+            // Fallback: draw frozen image dimmed, or just dim overlay
+            drawFrozenImageDimmed()
             return
         }
         
@@ -449,29 +463,38 @@ class AreaSelectionView: NSView {
         drawModeIndicator()
     }
     
+    /// Draw frozen image with dim overlay on top. Falls back to solid dim if no frozen image.
+    private func drawFrozenImageDimmed() {
+        if let frozenImage = frozenImage {
+            frozenImage.draw(in: bounds, from: .zero, operation: .copy, fraction: 1.0)
+        }
+        NSColor.black.withAlphaComponent(0.3).setFill()
+        bounds.fill()
+    }
+
     private func drawAreaMode() {
         // Draw selection rectangle if selecting
         if let coordinator = coordinator,
            let start = coordinator.selectionStart,
            let end = coordinator.selectionEnd {
-            
+
             // Convert global screen coordinates to local view coordinates
             let localStart = NSPoint(x: start.x - screen.frame.origin.x, y: start.y - screen.frame.origin.y)
             let localEnd = NSPoint(x: end.x - screen.frame.origin.x, y: end.y - screen.frame.origin.y)
-            
+
             let selectionRect = rectFromPoints(localStart, localEnd)
 
-            // Create a path that covers the entire view but excludes the selection
-            let overlayPath = NSBezierPath(rect: bounds)
-            if selectionRect.intersects(bounds) {
-                let clippedRect = selectionRect.intersection(bounds)
-                overlayPath.append(NSBezierPath(rect: clippedRect).reversed)
-            }
-            overlayPath.windingRule = .evenOdd
+            // Draw frozen image dimmed everywhere
+            drawFrozenImageDimmed()
 
-            // Fill the overlay (everything except selection)
-            NSColor.black.withAlphaComponent(0.3).setFill()
-            overlayPath.fill()
+            // Draw frozen image at full brightness inside the selection rect (bright cutout)
+            if selectionRect.intersects(bounds), let frozenImage = frozenImage {
+                let clippedRect = selectionRect.intersection(bounds)
+                NSGraphicsContext.saveGraphicsState()
+                NSBezierPath(rect: clippedRect).setClip()
+                frozenImage.draw(in: bounds, from: .zero, operation: .copy, fraction: 1.0)
+                NSGraphicsContext.restoreGraphicsState()
+            }
 
             // Draw border around selection (only on the screen where selection is visible)
             if selectionRect.intersects(bounds) && bounds.contains(selectionRect) {
@@ -488,41 +511,48 @@ class AreaSelectionView: NSView {
                 dashPath.stroke()
             }
         } else {
-            // No selection yet - fill entire view with dim overlay
-            NSColor.black.withAlphaComponent(0.3).setFill()
-            bounds.fill()
+            // No selection yet - draw frozen image dimmed
+            drawFrozenImageDimmed()
         }
     }
     
     private func drawWindowMode() {
-        // Semi-transparent overlay
-        NSColor.black.withAlphaComponent(0.3).setFill()
-        bounds.fill()
-        
+        // Draw frozen image dimmed
+        drawFrozenImageDimmed()
+
         // Highlight the hovered window
         if let coordinator = coordinator, let window = coordinator.highlightedWindow {
             drawWindowHighlight(window)
         }
     }
-    
+
     private func drawWindowHighlight(_ window: SCWindow) {
         // Convert window frame to screen coordinates, then to view coordinates
         let windowFrame = window.frame
         let localFrame = convertWindowFrameToView(windowFrame)
-        
+
         // Only draw if window is on this screen
         guard localFrame.intersects(bounds) else { return }
-        
-        // Clear the window area (cut out from overlay)
-        NSColor.clear.setFill()
-        localFrame.intersection(bounds).fill()
-        
+
+        // Draw frozen image at full brightness in the window area (cut out the dim)
+        let clippedFrame = localFrame.intersection(bounds)
+        if let frozenImage = frozenImage {
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: clippedFrame).setClip()
+            frozenImage.draw(in: bounds, from: .zero, operation: .copy, fraction: 1.0)
+            NSGraphicsContext.restoreGraphicsState()
+        } else {
+            // Fallback: clear the window area
+            NSColor.clear.setFill()
+            clippedFrame.fill()
+        }
+
         // Draw highlight border
         NSColor.systemBlue.setStroke()
         let borderPath = NSBezierPath(rect: localFrame)
         borderPath.lineWidth = 4
         borderPath.stroke()
-        
+
         // Draw window info label
         drawWindowLabel(window, at: localFrame)
     }

@@ -13,6 +13,7 @@ class HotkeyManager {
     private let onFullscreen: (Bool) -> Void  // Bool = directCopy (Option held)
     private let onArea: (Bool) -> Void
     private let onWindow: (Bool) -> Void
+    private let onPotentialCapture: () -> Void
     
     // Cache shortcuts for performance
     private var fullscreenShortcut: ShortcutConfig
@@ -26,11 +27,13 @@ class HotkeyManager {
     init(
         onFullscreen: @escaping (Bool) -> Void,
         onArea: @escaping (Bool) -> Void,
-        onWindow: @escaping (Bool) -> Void
+        onWindow: @escaping (Bool) -> Void,
+        onPotentialCapture: @escaping () -> Void = {}
     ) {
         self.onFullscreen = onFullscreen
         self.onArea = onArea
         self.onWindow = onWindow
+        self.onPotentialCapture = onPotentialCapture
         
         // Load initial shortcuts
         let prefs = PreferencesManager.shared
@@ -106,6 +109,7 @@ class HotkeyManager {
         
         // Create event tap for key down events and tap disable notifications
         let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue) |
+                                      (1 << CGEventType.flagsChanged.rawValue) |
                                       (1 << CGEventType.tapDisabledByTimeout.rawValue) |
                                       (1 << CGEventType.tapDisabledByUserInput.rawValue)
         
@@ -146,6 +150,26 @@ class HotkeyManager {
             logger.warning("Event tap was disabled by system, re-enabling...")
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
+            }
+            return Unmanaged.passRetained(event)
+        }
+
+        if type == .flagsChanged {
+            if !isAreaSelectorActive {
+                let flags = event.flags
+                let matchesAnyShortcut = [fullscreenShortcut, areaShortcut, windowShortcut].contains { shortcut in
+                    guard shortcut.isEnabled else { return false }
+                    let required = CGEventFlags(rawValue: UInt64(shortcut.modifiers))
+                    return flags.contains(.maskCommand) == required.contains(.maskCommand)
+                        && flags.contains(.maskShift) == required.contains(.maskShift)
+                        && flags.contains(.maskControl) == required.contains(.maskControl)
+                        && flags.contains(.maskAlternate) == required.contains(.maskAlternate)
+                }
+                if matchesAnyShortcut {
+                    DispatchQueue.main.async {
+                        self.onPotentialCapture()
+                    }
+                }
             }
             return Unmanaged.passRetained(event)
         }

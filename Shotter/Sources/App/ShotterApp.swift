@@ -63,7 +63,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager = HotkeyManager(
             onFullscreen: { [weak self] directCopy in self?.captureFullscreen(directCopy: directCopy) },
             onArea: { [weak self] directCopy in self?.captureArea(directCopy: directCopy) },
-            onWindow: { [weak self] directCopy in self?.captureWindow(directCopy: directCopy) }
+            onWindow: { [weak self] directCopy in self?.captureWindow(directCopy: directCopy) },
+            onPotentialCapture: { [weak self] in self?.captureEngine?.preCaptureScreens() }
         )
 
         captureEngine = CaptureEngine(hotkeyManager: hotkeyManager)

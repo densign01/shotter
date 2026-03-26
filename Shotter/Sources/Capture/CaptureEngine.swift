@@ -37,6 +37,12 @@ class CaptureEngine {
     private var activeAreaSelector: AreaSelectorWindow?
     private var activeWindowSelector: WindowSelectorController?
 
+    // Pre-capture cache for preserving menus/tooltips during hotkey capture
+    private var preCapturedScreens: [(screen: NSScreen, image: CGImage)]?
+    private var preCaptureTimestamp: Date?
+    private var isPreCapturing = false
+    private static let preCaptureTimeout: TimeInterval = 0.5
+
     init(hotkeyManager: HotkeyManager? = nil) {
         self.hotkeyManager = hotkeyManager
 
@@ -143,13 +149,101 @@ class CaptureEngine {
         }
     }
 
+    // MARK: - Pre-Capture
+
+    func preCaptureScreens() {
+        // Skip if a pre-capture is already in flight or recently completed
+        guard !isPreCapturing else { return }
+        if let ts = preCaptureTimestamp, Date().timeIntervalSince(ts) < Self.preCaptureTimeout {
+            return
+        }
+        isPreCapturing = true
+        Task {
+            let displays = await getAvailableDisplays()
+            var result: [(screen: NSScreen, image: CGImage)] = []
+            for display in displays {
+                guard let screen = display.screen,
+                      let cgImage = await captureDisplayCGImage(display) else {
+                    continue
+                }
+                result.append((screen: screen, image: cgImage))
+            }
+            nonisolated(unsafe) let captures = result
+            let count = captures.count
+            await MainActor.run {
+                self.preCapturedScreens = captures
+                self.preCaptureTimestamp = Date()
+                self.isPreCapturing = false
+                logger.debug("Pre-captured \(count) screens for frozen capture")
+            }
+        }
+    }
+
+    @MainActor
+    private func consumePreCaptures() -> [(screen: NSScreen, image: CGImage)]? {
+        guard let captures = preCapturedScreens,
+              let timestamp = preCaptureTimestamp,
+              Date().timeIntervalSince(timestamp) < Self.preCaptureTimeout else {
+            preCapturedScreens = nil
+            preCaptureTimestamp = nil
+            return nil
+        }
+        preCapturedScreens = nil
+        preCaptureTimestamp = nil
+        return captures
+    }
+
     // MARK: - Area Capture
 
     func captureArea() async -> CaptureResult? {
-        let result = await showAreaSelector()
+        let displays = await getAvailableDisplays()
+        var screenCaptures: [(screen: NSScreen, image: CGImage)]
+
+        if let cached = await consumePreCaptures() {
+            logger.debug("Using pre-captured screens for area capture")
+            screenCaptures = cached
+        } else {
+            screenCaptures = []
+            for display in displays {
+                guard let screen = display.screen,
+                      let cgImage = await captureDisplayCGImage(display) else {
+                    continue
+                }
+                screenCaptures.append((screen: screen, image: cgImage))
+            }
+        }
+
+        guard !screenCaptures.isEmpty else {
+            logger.error("Failed to capture any displays for frozen screen")
+            return nil
+        }
+
+        let result = await showAreaSelector(screenCaptures: screenCaptures)
 
         switch result {
         case .area(let areaResult):
+            // Crop from pre-captured images instead of re-capturing via ScreenCaptureKit
+            let intersecting = displays.filter { display in
+                guard let screen = display.screen else { return false }
+                return screen.frame.intersects(areaResult.globalRect)
+            }
+            let capturedDisplays: [(display: CaptureDisplay, image: CGImage)] = intersecting.compactMap { display in
+                guard let screenFrame = display.screen?.frame,
+                      let capture = screenCaptures.first(where: { $0.screen.frame.origin == screenFrame.origin }) else {
+                    return nil
+                }
+                return (display: display, image: capture.image)
+            }
+
+            if let image = composeAreaCapture(from: capturedDisplays, selectionRect: areaResult.globalRect) {
+                return CaptureResult(
+                    image: image,
+                    preferredScreen: preferredScreen(for: areaResult.globalRect, displays: intersecting)
+                )
+            }
+
+            // Fallback: frozen crop failed, try live capture
+            logger.warning("Frozen crop failed, falling back to live capture")
             return await captureArea(in: areaResult.globalRect)
         case .window(let window):
             return await captureWindow(window)
@@ -353,9 +447,9 @@ class CaptureEngine {
     // MARK: - Selectors
 
     @MainActor
-    private func showAreaSelector() async -> AreaSelectorInternalResult {
+    private func showAreaSelector(screenCaptures: [(screen: NSScreen, image: CGImage)]) async -> AreaSelectorInternalResult {
         await withCheckedContinuation { continuation in
-            let selector = AreaSelectorWindow { [weak self] result in
+            let selector = AreaSelectorWindow(screenCaptures: screenCaptures) { [weak self] result in
                 self?.hotkeyManager?.deactivateAreaSelector()
                 self?.activeAreaSelector = nil
 
