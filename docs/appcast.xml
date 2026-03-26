@@ -6,6 +6,27 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.7.2</title>
+      <pubDate>Wed, 26 Mar 2026 14:30:00 -0400</pubDate>
+      <sparkle:version>172</sparkle:version>
+      <sparkle:shortVersionString>1.7.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's New in 1.7.2</h2>
+        <ul>
+          <li><strong>Frozen Screen Capture:</strong> Area capture now freezes the screen so tooltips, menus, and other transient UI remain visible during selection</li>
+          <li><strong>Overlay Stability:</strong> Fixed screen jump when area selector appears</li>
+          <li><strong>Menu Bar Fix:</strong> Clicking the menu bar no longer dismisses the area selector</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.7.2/Shotter-1.7.2.dmg"
+        length="2995518"
+        type="application/octet-stream"
+        sparkle:edSignature="BS7TALItb5fxV5KtRRTXGnDAaPNUQI4P82TdVL8gXbEAQpGHrBGCQFV2CtiXuBjiPYcuWGpgo5ZU6Y17B7Z+Dg=="
+      />
+    </item>
+    <item>
       <title>Version 1.7.1</title>
       <pubDate>Wed, 26 Mar 2026 06:30:00 -0400</pubDate>
       <sparkle:version>171</sparkle:version>
