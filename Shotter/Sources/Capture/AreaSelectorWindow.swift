@@ -55,6 +55,7 @@ class AreaSelectorWindow {
     private var completion: ((AreaSelectorResult) -> Void)?
     private var coordinator: AreaSelectionCoordinator?
     private var hasCompleted = false
+    private var localKeyMonitor: Any?
     
     init(completion: @escaping (AreaSelectorResult) -> Void) {
         self.completion = completion
@@ -85,42 +86,71 @@ class AreaSelectorWindow {
     
     func show() {
         NSCursor.crosshair.push()
+        installLocalKeyMonitor()
         for window in overlayWindows {
             window.show()
         }
     }
 
+    func toggleMode() {
+        coordinator?.toggleMode()
+    }
+
+    func cancel() {
+        coordinator?.cancel()
+    }
+
     private func handleAreaComplete(_ rect: CGRect) {
         guard !hasCompleted else { return }
-        hasCompleted = true
-        NSCursor.pop()
-        for window in overlayWindows {
-            window.orderOut(nil)
-        }
-        completion?(.area(rect))
-        completion = nil
+        complete(with: .area(rect))
     }
 
     private func handleWindowSelected(_ window: SCWindow) {
         guard !hasCompleted else { return }
-        hasCompleted = true
-        NSCursor.pop()
-        for window in overlayWindows {
-            window.orderOut(nil)
-        }
-        completion?(.window(window))
-        completion = nil
+        complete(with: .window(window))
     }
 
     private func handleCancel() {
         guard !hasCompleted else { return }
+        complete(with: .cancelled)
+    }
+
+    private func complete(with result: AreaSelectorResult) {
         hasCompleted = true
+        removeLocalKeyMonitor()
         NSCursor.pop()
         for window in overlayWindows {
             window.orderOut(nil)
         }
-        completion?(.cancelled)
+        completion?(result)
         completion = nil
+    }
+
+    private func installLocalKeyMonitor() {
+        guard localKeyMonitor == nil else { return }
+
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, !self.hasCompleted else {
+                return event
+            }
+
+            switch event.keyCode {
+            case 49: // Space
+                self.toggleMode()
+                return nil
+            case 53: // Escape
+                self.cancel()
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeLocalKeyMonitor() {
+        guard let localKeyMonitor else { return }
+        NSEvent.removeMonitor(localKeyMonitor)
+        self.localKeyMonitor = nil
     }
 }
 
@@ -316,9 +346,8 @@ class AreaOverlayWindow: NSPanel {
     private weak var coordinator: AreaSelectionCoordinator?
     let associatedScreen: NSScreen
 
-    // Required for borderless panels to receive key events
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
 
     init(screen: NSScreen, coordinator: AreaSelectionCoordinator) {
         self.coordinator = coordinator
@@ -341,7 +370,7 @@ class AreaOverlayWindow: NSPanel {
         self.hasShadow = false
         self.hidesOnDeactivate = false
         self.isFloatingPanel = true
-        self.becomesKeyOnlyIfNeeded = false
+        self.becomesKeyOnlyIfNeeded = true
 
         // Create selection view - use local bounds (0,0 origin), not screen coordinates
         let viewFrame = NSRect(origin: .zero, size: screen.frame.size)
@@ -352,10 +381,7 @@ class AreaOverlayWindow: NSPanel {
     }
 
     func show() {
-        self.makeKeyAndOrderFront(nil)
-        if let view = selectionView {
-            self.makeFirstResponder(view)
-        }
+        self.orderFrontRegardless()
     }
 
     /// Handle Escape key to cancel selection (prevents default app behavior)
@@ -642,19 +668,6 @@ class AreaSelectionView: NSView {
         let localPoint = convert(event.locationInWindow, from: nil)
         let globalPoint = NSPoint(x: localPoint.x + screen.frame.origin.x, y: localPoint.y + screen.frame.origin.y)
         coordinator.handleMouseMoved(at: globalPoint)
-    }
-    
-    override func keyDown(with event: NSEvent) {
-        guard let coordinator = coordinator else { return }
-        
-        switch event.keyCode {
-        case 53: // Escape
-            coordinator.cancel()
-        case 49: // Space - toggle mode
-            coordinator.toggleMode()
-        default:
-            break
-        }
     }
     
     private func rectFromPoints(_ p1: NSPoint, _ p2: NSPoint) -> NSRect {

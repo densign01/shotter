@@ -45,9 +45,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         // Initialize components
-        captureEngine = CaptureEngine()
         overlayController = OverlayController()
-        
+
         menuBarController = MenuBarController(
             onCaptureFullscreen: { [weak self] in self?.captureFullscreen() },
             onCaptureArea: { [weak self] in self?.captureArea() },
@@ -66,6 +65,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onArea: { [weak self] directCopy in self?.captureArea(directCopy: directCopy) },
             onWindow: { [weak self] directCopy in self?.captureWindow(directCopy: directCopy) }
         )
+
+        captureEngine = CaptureEngine(hotkeyManager: hotkeyManager)
         
         // Check permissions on launch
         Task {

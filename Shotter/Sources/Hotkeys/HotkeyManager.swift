@@ -18,6 +18,10 @@ class HotkeyManager {
     private var fullscreenShortcut: ShortcutConfig
     private var areaShortcut: ShortcutConfig
     private var windowShortcut: ShortcutConfig
+
+    var isAreaSelectorActive = false
+    var onSelectorSpace: (() -> Void)?
+    var onSelectorEscape: (() -> Void)?
     
     init(
         onFullscreen: @escaping (Bool) -> Void,
@@ -153,6 +157,23 @@ class HotkeyManager {
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
 
+        if isAreaSelectorActive {
+            switch keyCode {
+            case 49: // Space
+                DispatchQueue.main.async {
+                    self.onSelectorSpace?()
+                }
+                return nil
+            case 53: // Escape
+                DispatchQueue.main.async {
+                    self.onSelectorEscape?()
+                }
+                return nil
+            default:
+                break
+            }
+        }
+
         // Check fullscreen shortcut (allow Option as extra modifier for direct-copy)
         if fullscreenShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: fullscreenShortcut, allowExtraOption: true) {
             guard Permissions.checkScreenRecordingSync(forceRefresh: true) else {
@@ -234,5 +255,17 @@ class HotkeyManager {
         }
         eventTap = nil
         runLoopSource = nil
+    }
+
+    func activateAreaSelector(onSpace: @escaping () -> Void, onEscape: @escaping () -> Void) {
+        isAreaSelectorActive = true
+        onSelectorSpace = onSpace
+        onSelectorEscape = onEscape
+    }
+
+    func deactivateAreaSelector() {
+        isAreaSelectorActive = false
+        onSelectorSpace = nil
+        onSelectorEscape = nil
     }
 }

@@ -31,12 +31,15 @@ struct CaptureResult {
 
 class CaptureEngine {
     private var availableContent: SCShareableContent?
+    private weak var hotkeyManager: HotkeyManager?
 
     // Retain selectors to prevent deallocation while showing
     private var activeAreaSelector: AreaSelectorWindow?
     private var activeWindowSelector: WindowSelectorController?
 
-    init() {
+    init(hotkeyManager: HotkeyManager? = nil) {
+        self.hotkeyManager = hotkeyManager
+
         Task {
             await refreshAvailableContent()
         }
@@ -353,6 +356,7 @@ class CaptureEngine {
     private func showAreaSelector() async -> AreaSelectorInternalResult {
         await withCheckedContinuation { continuation in
             let selector = AreaSelectorWindow { [weak self] result in
+                self?.hotkeyManager?.deactivateAreaSelector()
                 self?.activeAreaSelector = nil
 
                 switch result {
@@ -365,6 +369,14 @@ class CaptureEngine {
                 }
             }
             self.activeAreaSelector = selector
+            hotkeyManager?.activateAreaSelector(
+                onSpace: { [weak selector] in
+                    selector?.toggleMode()
+                },
+                onEscape: { [weak selector] in
+                    selector?.cancel()
+                }
+            )
             selector.show()
         }
     }
