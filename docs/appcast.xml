@@ -6,6 +6,25 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.7.1</title>
+      <pubDate>Wed, 26 Mar 2026 06:30:00 -0400</pubDate>
+      <sparkle:version>171</sparkle:version>
+      <sparkle:shortVersionString>1.7.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's Fixed in 1.7.1</h2>
+        <ul>
+          <li><strong>Tooltips & Menus:</strong> Tooltips, dropdown menus, and other transient UI no longer disappear when starting an area capture (⌘⇧4)</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.7.1/Shotter-1.7.1.dmg"
+        length="2991134"
+        type="application/octet-stream"
+        sparkle:edSignature="sOSOEZBRjUnon9Z//KvLHlojsx3mXS3vZES8v4tgCN9MTBmKk9nye4pUCueLqZvwUjZQCfmMoeoaViOE11P+Cg=="
+      />
+    </item>
+    <item>
       <title>Version 1.7.0</title>
       <pubDate>Tue, 18 Mar 2026 12:00:00 -0400</pubDate>
       <sparkle:version>170</sparkle:version>
