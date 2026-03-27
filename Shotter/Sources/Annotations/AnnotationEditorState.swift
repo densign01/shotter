@@ -18,6 +18,10 @@ class AnnotationEditorState: ObservableObject {
     @Published var cropRect: CGRect? = nil
     @Published private(set) var canvasFocusRequestID: Int = 0
 
+    // Mockup
+    @Published var showMockupPanel: Bool = false
+    @Published var mockupConfig = MockupConfiguration()
+
     // Modifier keys
     var isShiftKeyHeld: Bool = false
     
@@ -333,6 +337,31 @@ class AnnotationEditorState: ObservableObject {
     func cancelCrop() {
         cropRect = nil
         setTool(.select)
+    }
+
+    // MARK: - Mockup
+
+    func applyMockup() {
+        let config = mockupConfig
+        guard config.frame != .none || config.backgroundStyle != .none else { return }
+
+        // Render the current image with all annotations
+        guard let currentImage = renderFinalImage() else { return }
+
+        // Apply mockup
+        let mockupImage = MockupRenderer.render(image: currentImage, config: config)
+
+        // Replace the base image and clear annotations (they're baked in)
+        baseImage = mockupImage
+        imageSize = mockupImage.size
+        annotations.removeAll()
+        undoStack.removeAll()
+        redoStack.removeAll()
+        hasBeenCropped = true  // Mark as modified
+        showMockupPanel = false
+
+        // Reset mockup config
+        mockupConfig = MockupConfiguration()
     }
 
     // MARK: - Rendering

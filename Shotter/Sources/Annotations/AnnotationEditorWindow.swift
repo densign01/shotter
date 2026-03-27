@@ -336,9 +336,14 @@ struct AnnotationEditorView: View {
             VStack(spacing: 0) {
                 // Toolbar
                 AnnotationToolbar(state: state, onSave: onSave, onCopy: onCopy, onCancel: onCancel)
-                
+
                 Divider()
-                
+
+                if state.showMockupPanel {
+                    MockupPanel(state: state)
+                    Divider()
+                }
+
                 // Canvas
                 GeometryReader { geometry in
                     ZStack {
@@ -406,7 +411,27 @@ struct AnnotationToolbar: View {
             )
             
             Spacer()
-            
+
+            // Mockup button
+            Button(action: {
+                state.showMockupPanel.toggle()
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "macwindow")
+                        .font(.system(size: 12))
+                    Text("Mockup")
+                        .font(.system(size: 11))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(state.showMockupPanel ? Color.accentColor.opacity(0.2) : Color.gray.opacity(0.1))
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Add device frame and background")
+
             // Undo/Redo
             HStack(spacing: 4) {
                 HoverIconButton(icon: "arrow.uturn.backward", tooltip: "Undo (⌘Z)", action: { state.undo() })
@@ -587,6 +612,107 @@ struct ColorSwatchButton: View {
         .help(colorName)
         .accessibilityLabel(Text(colorName))
         .accessibilityValue(Text(isSelected ? "Selected" : "Not selected"))
+    }
+}
+
+// MARK: - Mockup Panel
+
+struct MockupPanel: View {
+    @ObservedObject var state: AnnotationEditorState
+
+    private let gradientPresets: [(String, NSColor, NSColor)] = [
+        ("Blue-Purple", .systemBlue, .systemPurple),
+        ("Pink-Orange", .systemPink, .systemOrange),
+        ("Green-Teal", .systemGreen, .systemTeal),
+        ("Indigo-Pink", .systemIndigo, .systemPink),
+    ]
+
+    var body: some View {
+        HStack(spacing: 16) {
+            // Frame picker
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Frame")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Picker("", selection: $state.mockupConfig.frame) {
+                    ForEach(MockupFrame.allCases) { frame in
+                        Text(frame.rawValue).tag(frame)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 140)
+            }
+
+            Divider().frame(height: 30)
+
+            // Background style
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Background")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Picker("", selection: $state.mockupConfig.backgroundStyle) {
+                    ForEach(BackgroundStyle.allCases) { style in
+                        Text(style.rawValue).tag(style)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 110)
+            }
+
+            if state.mockupConfig.backgroundStyle != .none {
+                // Gradient presets
+                HStack(spacing: 4) {
+                    ForEach(gradientPresets, id: \.0) { name, start, end in
+                        Button(action: {
+                            state.mockupConfig.backgroundColor = start
+                            state.mockupConfig.gradientEndColor = end
+                            if state.mockupConfig.backgroundStyle == .solid {
+                                state.mockupConfig.backgroundStyle = .gradient
+                            }
+                        }) {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(start), Color(end)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 20, height: 20)
+                        }
+                        .buttonStyle(.plain)
+                        .help(name)
+                    }
+                }
+
+                // Padding slider
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Padding")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Slider(value: $state.mockupConfig.padding, in: 0...100, step: 10)
+                        .frame(width: 80)
+                }
+            }
+
+            Spacer()
+
+            // Apply button
+            Button(action: {
+                state.applyMockup()
+            }) {
+                Text("Apply")
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.accentColor))
+                    .foregroundColor(.white)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 }
 
