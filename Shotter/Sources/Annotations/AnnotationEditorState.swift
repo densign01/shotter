@@ -18,6 +18,14 @@ class AnnotationEditorState: ObservableObject {
     @Published var cropRect: CGRect? = nil
     @Published private(set) var canvasFocusRequestID: Int = 0
 
+    // Zoom and pan
+    @Published var zoomLevel: CGFloat = 1.0
+    @Published var panOffset: CGPoint = .zero
+
+    static let zoomLevels: [CGFloat] = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]
+    static let minZoom: CGFloat = 0.25
+    static let maxZoom: CGFloat = 4.0
+
     // Modifier keys
     var isShiftKeyHeld: Bool = false
     
@@ -218,6 +226,37 @@ class AnnotationEditorState: ObservableObject {
         selectedAnnotationId = nil
     }
     
+    // MARK: - Zoom
+
+    func zoomIn() {
+        let next = Self.zoomLevels.first(where: { $0 > zoomLevel }) ?? Self.maxZoom
+        setZoom(next)
+    }
+
+    func zoomOut() {
+        let prev = Self.zoomLevels.last(where: { $0 < zoomLevel }) ?? Self.minZoom
+        setZoom(prev)
+    }
+
+    func zoomToFit() {
+        zoomLevel = 1.0
+        panOffset = .zero
+    }
+
+    func setZoom(_ level: CGFloat) {
+        zoomLevel = min(max(level, Self.minZoom), Self.maxZoom)
+        if zoomLevel <= 1.0 {
+            panOffset = .zero
+        }
+    }
+
+    var zoomDisplayString: String {
+        if zoomLevel == 1.0 {
+            return "Fit"
+        }
+        return "\(Int(round(zoomLevel * 100)))%"
+    }
+
     // MARK: - Text Editing
     
     func updateTextAnnotation(id: AnnotationID, text: String) {
@@ -430,6 +469,20 @@ extension AnnotationEditorState {
                 if selectedAnnotationId == nil, let first = annotations.first {
                     selectAnnotation(first.id)
                 }
+                return true
+            default:
+                break
+            }
+            // Zoom shortcuts by keyCode
+            switch event.keyCode {
+            case 24: // Cmd+=  (plus/equals key)
+                zoomIn()
+                return true
+            case 27: // Cmd+-
+                zoomOut()
+                return true
+            case 29: // Cmd+0
+                zoomToFit()
                 return true
             default:
                 break

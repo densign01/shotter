@@ -161,9 +161,19 @@ class AnnotationCanvasView: NSView {
     private func imageRectInView() -> CGRect {
         guard let state = state else { return .zero }
 
-        let imageRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
-        scale = imageRect.width / state.imageSize.width
-        return imageRect
+        let fitRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
+        let fitScale = fitRect.width / state.imageSize.width
+
+        let effectiveScale = fitScale * state.zoomLevel
+        scale = effectiveScale
+
+        let scaledWidth = state.imageSize.width * effectiveScale
+        let scaledHeight = state.imageSize.height * effectiveScale
+
+        let originX = (bounds.width - scaledWidth) / 2 + state.panOffset.x
+        let originY = (bounds.height - scaledHeight) / 2 + state.panOffset.y
+
+        return CGRect(x: originX, y: originY, width: scaledWidth, height: scaledHeight)
     }
     
     private func drawCheckerboard(in rect: CGRect, context: CGContext) {
@@ -266,6 +276,27 @@ class AnnotationCanvasView: NSView {
         context.stroke(annotation.bounds)
     }
     
+    // MARK: - Scroll Wheel (Zoom & Pan)
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let state = state else { return }
+
+        if event.modifierFlags.contains(.command) || event.phase == .changed && event.momentumPhase == .init(rawValue: 0) {
+            // Pinch-to-zoom or Cmd+scroll
+            let delta = event.scrollingDeltaY
+            if abs(delta) > 0.1 {
+                let newZoom = state.zoomLevel * (1.0 + delta * 0.01)
+                state.setZoom(newZoom)
+                needsDisplay = true
+            }
+        } else if state.zoomLevel > 1.0 {
+            // Pan when zoomed in
+            state.panOffset.x += event.scrollingDeltaX
+            state.panOffset.y -= event.scrollingDeltaY
+            needsDisplay = true
+        }
+    }
+
     // MARK: - Coordinate Conversion
     
     func viewPointToImagePoint(_ viewPoint: CGPoint) -> CGPoint {

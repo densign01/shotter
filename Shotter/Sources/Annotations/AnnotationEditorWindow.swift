@@ -369,12 +369,14 @@ struct AnnotationEditorView: View {
         let imageSize = state.imageSize
         let imageAspect = imageSize.width / imageSize.height
         let viewAspect = viewSize.width / viewSize.height
-        
+
+        let fitScale: CGFloat
         if imageAspect > viewAspect {
-            return viewSize.width / imageSize.width
+            fitScale = viewSize.width / imageSize.width
         } else {
-            return viewSize.height / imageSize.height
+            fitScale = viewSize.height / imageSize.height
         }
+        return fitScale * state.zoomLevel
     }
 }
 
@@ -663,6 +665,42 @@ struct ToolOptionsBar: View {
             }
 
             Spacer()
+
+            // Zoom controls
+            HStack(spacing: 4) {
+                Button(action: { state.zoomOut() }) {
+                    Image(systemName: "minus.magnifyingglass")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .disabled(state.zoomLevel <= AnnotationEditorState.minZoom)
+                .help("Zoom Out (⌘-)")
+
+                Picker("", selection: Binding(
+                    get: { state.zoomLevel },
+                    set: { state.setZoom($0) }
+                )) {
+                    Text("Fit").tag(CGFloat(1.0))
+                    Text("50%").tag(CGFloat(0.5))
+                    Text("75%").tag(CGFloat(0.75))
+                    Text("150%").tag(CGFloat(1.5))
+                    Text("200%").tag(CGFloat(2.0))
+                    Text("300%").tag(CGFloat(3.0))
+                }
+                .pickerStyle(.menu)
+                .frame(width: 70)
+
+                Button(action: { state.zoomIn() }) {
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .disabled(state.zoomLevel >= AnnotationEditorState.maxZoom)
+                .help("Zoom In (⌘+)")
+            }
+
+            Divider()
+                .frame(height: 20)
 
             // Keyboard shortcut hints (always visible)
             Text(keyboardHint)
