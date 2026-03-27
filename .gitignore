@@ -36,6 +36,7 @@ Package.resolved
 
 # Claude continuity
 thoughts/
+.claude/
 
 # Build output
 dist/
