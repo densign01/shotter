@@ -17,6 +17,7 @@ class AnnotationEditorState: ObservableObject {
     @Published var nextCounterNumber: Int = 1
     @Published var cropRect: CGRect? = nil
     @Published private(set) var canvasFocusRequestID: Int = 0
+    @Published var isDetectingSensitiveData: Bool = false
 
     // Modifier keys
     var isShiftKeyHeld: Bool = false
@@ -333,6 +334,37 @@ class AnnotationEditorState: ObservableObject {
     func cancelCrop() {
         cropRect = nil
         setTool(.select)
+    }
+
+    // MARK: - Auto-Redact
+
+    func autoRedact() {
+        guard !isDetectingSensitiveData else { return }
+        isDetectingSensitiveData = true
+
+        Task {
+            let regions = await SensitiveDataDetector.detect(in: baseImage)
+
+            await MainActor.run {
+                if regions.isEmpty {
+                    // No sensitive data found
+                    isDetectingSensitiveData = false
+                    return
+                }
+
+                // Add blur annotations for each detected region
+                saveUndoCheckpoint()
+                for region in regions where region.isSelected {
+                    let blur = BlurAnnotation(
+                        bounds: region.bounds,
+                        blurRadius: 15
+                    )
+                    annotations.append(AnyAnnotation(blur))
+                }
+
+                isDetectingSensitiveData = false
+            }
+        }
     }
 
     // MARK: - Rendering

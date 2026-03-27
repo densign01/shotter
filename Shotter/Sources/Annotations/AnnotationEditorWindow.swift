@@ -404,7 +404,36 @@ struct AnnotationToolbar: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(NSColor.controlBackgroundColor))
             )
-            
+
+            Divider()
+                .frame(height: 24)
+
+            Button(action: {
+                state.autoRedact()
+            }) {
+                HStack(spacing: 4) {
+                    if state.isDetectingSensitiveData {
+                        ProgressView()
+                            .controlSize(.small)
+                            .scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "eye.slash")
+                            .font(.system(size: 12))
+                    }
+                    Text(state.isDetectingSensitiveData ? "Scanning..." : "Auto-Redact")
+                        .font(.system(size: 11))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.orange.opacity(0.15))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(state.isDetectingSensitiveData)
+            .help("Detect and blur sensitive information (emails, API keys, etc.)")
+
             Spacer()
             
             // Undo/Redo
