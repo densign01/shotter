@@ -61,6 +61,13 @@ struct PreferencesView: View {
 
                 Toggle("Save screenshots automatically", isOn: $prefs.autoSaveScreenshots)
 
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("AI file naming", isOn: $prefs.useSmartFileNaming)
+                    Text("Use on-device OCR to generate descriptive filenames")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
                 Text("General")

@@ -98,7 +98,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.warning("Failed to capture fullscreen")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+            await handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
         }
     }
 
@@ -109,7 +109,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.info("Area capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+            await handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
         }
     }
 
@@ -120,21 +120,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.info("Window capture returned nil (user cancelled or failed)")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+            await handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
         }
     }
-    
+
     private func captureDisplay(_ display: CaptureDisplay) {
         Task {
             guard let result = await captureEngine?.captureDisplay(display) else {
                 logger.warning("Failed to capture display: \(display.name)")
                 return
             }
-            handleCapture(result.image, preferredScreen: result.preferredScreen)
+            await handleCapture(result.image, preferredScreen: result.preferredScreen)
         }
     }
     
-    private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) {
+    private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) async {
         let prefs = PreferencesManager.shared
 
         // Direct-copy mode: Option held + auto-copy is OFF → copy and skip overlay
@@ -149,7 +149,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let result: Result<URL, SaveError>?
         let savedURL: URL?
         if prefs.autoSaveScreenshots {
-            result = saveImage(image)
+            var filename: String? = nil
+            if prefs.useSmartFileNaming {
+                filename = await FileNaming.generateSmartFilename(for: image)
+            }
+            result = saveImage(image, filename: filename)
             savedURL = try? result?.get()
         } else {
             result = nil
@@ -258,10 +262,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func saveImage(_ image: NSImage) -> Result<URL, SaveError> {
+    private func saveImage(_ image: NSImage, filename: String? = nil) -> Result<URL, SaveError> {
         let saveFolder = PreferencesManager.shared.saveLocation
-        let filename = FileNaming.generateFilename()
-        let fileURL = saveFolder.appendingPathComponent(filename)
+        let actualFilename = filename ?? FileNaming.generateFilename()
+        let fileURL = saveFolder.appendingPathComponent(actualFilename)
         
         // Ensure directory exists
         do {

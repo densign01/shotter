@@ -96,6 +96,7 @@ class PreferencesManager: ObservableObject {
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
         static let overlayPosition = "overlayPosition"
+        static let useSmartFileNaming = "useSmartFileNaming"
     }
     
     @Published var saveLocation: URL {
@@ -164,6 +165,12 @@ class PreferencesManager: ObservableObject {
     @Published var overlayPosition: OverlayPosition {
         didSet {
             defaults.set(overlayPosition.rawValue, forKey: Keys.overlayPosition)
+        }
+    }
+
+    @Published var useSmartFileNaming: Bool {
+        didSet {
+            defaults.set(useSmartFileNaming, forKey: Keys.useSmartFileNaming)
         }
     }
 
@@ -236,6 +243,9 @@ class PreferencesManager: ObservableObject {
         } else {
             overlayPosition = .bottomLeft
         }
+
+        // Load smart file naming preference (default to false)
+        useSmartFileNaming = defaults.bool(forKey: Keys.useSmartFileNaming)
 
         defaults.set(actualLaunchAtLogin, forKey: Keys.launchAtLogin)
     }
