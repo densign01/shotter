@@ -6,6 +6,23 @@ import os.log
 
 private let logger = Logger(subsystem: "com.densign.shotter", category: "Preferences")
 
+/// Position for the timestamp overlay on screenshots
+enum TimestampPosition: String, CaseIterable {
+    case topLeft = "topLeft"
+    case topRight = "topRight"
+    case bottomLeft = "bottomLeft"
+    case bottomRight = "bottomRight"
+
+    var displayName: String {
+        switch self {
+        case .topLeft: return "Top Left"
+        case .topRight: return "Top Right"
+        case .bottomLeft: return "Bottom Left"
+        case .bottomRight: return "Bottom Right"
+        }
+    }
+}
+
 /// Position for the screenshot overlay
 enum OverlayPosition: String, CaseIterable {
     case bottomLeft = "bottomLeft"
@@ -96,6 +113,8 @@ class PreferencesManager: ObservableObject {
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
         static let overlayPosition = "overlayPosition"
+        static let autoAnnotateTimestamp = "autoAnnotateTimestamp"
+        static let timestampPosition = "timestampPosition"
     }
     
     @Published var saveLocation: URL {
@@ -167,6 +186,18 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    @Published var autoAnnotateTimestamp: Bool {
+        didSet {
+            defaults.set(autoAnnotateTimestamp, forKey: Keys.autoAnnotateTimestamp)
+        }
+    }
+
+    @Published var timestampPosition: TimestampPosition {
+        didSet {
+            defaults.set(timestampPosition.rawValue, forKey: Keys.timestampPosition)
+        }
+    }
+
     private func saveShortcut(_ config: ShortcutConfig, forKey key: String) {
         if let data = try? JSONEncoder().encode(config) {
             defaults.set(data, forKey: key)
@@ -235,6 +266,17 @@ class PreferencesManager: ObservableObject {
             overlayPosition = position
         } else {
             overlayPosition = .bottomLeft
+        }
+
+        // Load auto-annotate timestamp preference (default to false)
+        autoAnnotateTimestamp = defaults.bool(forKey: Keys.autoAnnotateTimestamp)
+
+        // Load timestamp position (default to bottom-left)
+        if let posString = defaults.string(forKey: Keys.timestampPosition),
+           let pos = TimestampPosition(rawValue: posString) {
+            timestampPosition = pos
+        } else {
+            timestampPosition = .bottomLeft
         }
 
         defaults.set(actualLaunchAtLogin, forKey: Keys.launchAtLogin)

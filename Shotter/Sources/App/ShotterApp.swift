@@ -134,8 +134,67 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    /// Applies a timestamp + app name overlay to the captured image
+    private func applyTimestampOverlay(_ image: NSImage) -> NSImage {
+        let prefs = PreferencesManager.shared
+        guard prefs.autoAnnotateTimestamp else { return image }
+
+        let appName = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        let timestamp = formatter.string(from: Date())
+        let text = "\(timestamp)  •  \(appName)"
+
+        let fontSize: CGFloat = max(11, min(14, image.size.width / 100))
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.white
+        ]
+        let textSize = (text as NSString).size(withAttributes: attributes)
+        let padding: CGFloat = 8
+        let barHeight = textSize.height + padding * 2
+        let barWidth = textSize.width + padding * 2
+
+        let annotatedImage = NSImage(size: image.size)
+        annotatedImage.lockFocus()
+
+        // Draw original image
+        image.draw(in: CGRect(origin: .zero, size: image.size))
+
+        // Calculate position
+        let position = prefs.timestampPosition
+        let barOrigin: CGPoint
+        switch position {
+        case .topLeft:
+            barOrigin = CGPoint(x: 0, y: image.size.height - barHeight)
+        case .topRight:
+            barOrigin = CGPoint(x: image.size.width - barWidth, y: image.size.height - barHeight)
+        case .bottomLeft:
+            barOrigin = CGPoint(x: 0, y: 0)
+        case .bottomRight:
+            barOrigin = CGPoint(x: image.size.width - barWidth, y: 0)
+        }
+
+        // Draw semi-transparent background bar
+        let barRect = CGRect(origin: barOrigin, size: CGSize(width: barWidth, height: barHeight))
+        NSColor.black.withAlphaComponent(0.5).setFill()
+        let barPath = NSBezierPath(roundedRect: barRect, xRadius: 4, yRadius: 4)
+        barPath.fill()
+
+        // Draw text
+        let textOrigin = CGPoint(x: barOrigin.x + padding, y: barOrigin.y + padding)
+        (text as NSString).draw(at: textOrigin, withAttributes: attributes)
+
+        annotatedImage.unlockFocus()
+        return annotatedImage
+    }
+
     private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) {
         let prefs = PreferencesManager.shared
+
+        // Apply timestamp overlay if enabled
+        let image = applyTimestampOverlay(image)
 
         // Direct-copy mode: Option held + auto-copy is OFF → copy and skip overlay
         let shouldDirectCopy = directCopy && !prefs.autoCopyToClipboard

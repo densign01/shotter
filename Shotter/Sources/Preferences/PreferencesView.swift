@@ -61,6 +61,22 @@ struct PreferencesView: View {
 
                 Toggle("Save screenshots automatically", isOn: $prefs.autoSaveScreenshots)
 
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Auto-annotate with timestamp", isOn: $prefs.autoAnnotateTimestamp)
+                    if prefs.autoAnnotateTimestamp {
+                        HStack {
+                            Text("Position:")
+                            Picker("", selection: $prefs.timestampPosition) {
+                                ForEach(TimestampPosition.allCases, id: \.self) { pos in
+                                    Text(pos.displayName).tag(pos)
+                                }
+                            }
+                            .frame(width: 120)
+                        }
+                        .padding(.leading, 20)
+                    }
+                }
+
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
                 Text("General")
