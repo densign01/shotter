@@ -8,6 +8,7 @@ struct PreferencesView: View {
         case fullscreen
         case area
         case window
+        case scrolling
     }
     
     var body: some View {
@@ -112,11 +113,37 @@ struct PreferencesView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Toggle("Scrolling Capture", isOn: Binding(
+                            get: { prefs.shortcutScrolling.isEnabled },
+                            set: { enabled in
+                                var config = prefs.shortcutScrolling
+                                config.isEnabled = enabled
+                                prefs.shortcutScrolling = config
+                            }
+                        ))
+                        Spacer()
+                        if prefs.shortcutScrolling.isEnabled {
+                            ShortcutBadge(shortcut: prefs.shortcutScrolling)
+                            Button("Change") {
+                                recordingShortcut = .scrolling
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                        }
+                    }
+                    Text("Capture scrollable content as a single tall image")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 Button("Reset to Defaults") {
                     prefs.shortcutFullscreen = .defaultFullscreen
                     prefs.shortcutArea = .defaultArea
                     prefs.shortcutWindow = .defaultWindow
+                    prefs.shortcutScrolling = .defaultScrolling
                 }
                 .foregroundColor(.secondary)
             } header: {

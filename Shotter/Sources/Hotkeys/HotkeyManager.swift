@@ -13,12 +13,14 @@ class HotkeyManager {
     private let onFullscreen: (Bool) -> Void  // Bool = directCopy (Option held)
     private let onArea: (Bool) -> Void
     private let onWindow: (Bool) -> Void
+    private let onScrolling: ((Bool) -> Void)?
     private let onPotentialCapture: () -> Void
     
     // Cache shortcuts for performance
     private var fullscreenShortcut: ShortcutConfig
     private var areaShortcut: ShortcutConfig
     private var windowShortcut: ShortcutConfig
+    private var scrollingShortcut: ShortcutConfig
 
     var isAreaSelectorActive = false
     var onSelectorSpace: (() -> Void)?
@@ -28,11 +30,13 @@ class HotkeyManager {
         onFullscreen: @escaping (Bool) -> Void,
         onArea: @escaping (Bool) -> Void,
         onWindow: @escaping (Bool) -> Void,
+        onScrolling: ((Bool) -> Void)? = nil,
         onPotentialCapture: @escaping () -> Void = {}
     ) {
         self.onFullscreen = onFullscreen
         self.onArea = onArea
         self.onWindow = onWindow
+        self.onScrolling = onScrolling
         self.onPotentialCapture = onPotentialCapture
         
         // Load initial shortcuts
@@ -40,6 +44,7 @@ class HotkeyManager {
         self.fullscreenShortcut = prefs.shortcutFullscreen
         self.areaShortcut = prefs.shortcutArea
         self.windowShortcut = prefs.shortcutWindow
+        self.scrollingShortcut = prefs.shortcutScrolling
         
         setupEventTap()
         observeShortcutChanges()
@@ -71,6 +76,7 @@ class HotkeyManager {
         fullscreenShortcut = prefs.shortcutFullscreen
         areaShortcut = prefs.shortcutArea
         windowShortcut = prefs.shortcutWindow
+        scrollingShortcut = prefs.shortcutScrolling
         logger.info("Shortcuts reloaded")
     }
 
@@ -157,7 +163,7 @@ class HotkeyManager {
         if type == .flagsChanged {
             if !isAreaSelectorActive {
                 let flags = event.flags
-                let matchesAnyShortcut = [fullscreenShortcut, areaShortcut, windowShortcut].contains { shortcut in
+                let matchesAnyShortcut = [fullscreenShortcut, areaShortcut, windowShortcut, scrollingShortcut].contains { shortcut in
                     guard shortcut.isEnabled else { return false }
                     let required = CGEventFlags(rawValue: UInt64(shortcut.modifiers))
                     return flags.contains(.maskCommand) == required.contains(.maskCommand)
@@ -239,7 +245,21 @@ class HotkeyManager {
             }
             return nil // Consume the event
         }
-        
+
+        // Check scrolling capture shortcut
+        if scrollingShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: scrollingShortcut, allowExtraOption: true) {
+            guard Permissions.checkScreenRecordingSync(forceRefresh: true) else {
+                logger.info("Screen recording unavailable - allowing native scrolling shortcut")
+                return Unmanaged.passRetained(event)
+            }
+
+            let directCopyRequested = directCopyRequested(flags: flags, shortcut: scrollingShortcut)
+            DispatchQueue.main.async {
+                self.onScrolling?(directCopyRequested)
+            }
+            return nil // Consume the event
+        }
+
         return Unmanaged.passRetained(event)
     }
     
