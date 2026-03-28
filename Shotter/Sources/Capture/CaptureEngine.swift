@@ -444,6 +444,56 @@ class CaptureEngine {
         return await captureWindow(window)
     }
 
+    // MARK: - Scrolling Capture
+
+    func captureScrolling() async -> CaptureResult? {
+        await refreshAvailableContent()
+        let windows = await getAvailableWindows()
+
+        guard let selection = await showWindowSelectorForScrolling(windows: windows) else {
+            return nil
+        }
+
+        let session = ScrollingCaptureSession(
+            selection: selection,
+            captureWindow: { [weak self] window in
+                guard let result = await self?.captureWindow(window) else { return nil }
+                return result.image
+            }
+        )
+
+        guard let image = await session.capture() else {
+            return nil
+        }
+
+        let windowCenter = CGPoint(x: selection.window.frame.midX, y: selection.window.frame.midY)
+        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
+        let cocoaCenter = NSPoint(x: windowCenter.x, y: mainScreenHeight - windowCenter.y)
+        let containingScreen = NSScreen.screens.first { $0.frame.contains(cocoaCenter) }
+
+        return CaptureResult(image: image, preferredScreen: containingScreen)
+    }
+
+    @MainActor
+    private func showWindowSelectorForScrolling(windows: [SCWindow]) async -> WindowSelectionResult? {
+        return await withCheckedContinuation { continuation in
+            let selector = WindowSelectorController(windows: windows) { [weak self] window in
+                self?.activeWindowSelector = nil
+                if let window = window {
+                    let clickPoint = NSPoint(
+                        x: window.frame.midX,
+                        y: window.frame.midY
+                    )
+                    continuation.resume(returning: WindowSelectionResult(window: window, clickPoint: clickPoint))
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
+            self.activeWindowSelector = selector
+            selector.show()
+        }
+    }
+
     // MARK: - Selectors
 
     @MainActor

@@ -51,6 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onCaptureFullscreen: { [weak self] in self?.captureFullscreen() },
             onCaptureArea: { [weak self] in self?.captureArea() },
             onCaptureWindow: { [weak self] in self?.captureWindow() },
+            onCaptureScrolling: { [weak self] in self?.captureScrolling() },
             onCaptureDisplay: { [weak self] display in self?.captureDisplay(display) },
             onOpenSaveFolder: { self.openSaveFolder() },
             onOpenPreferences: { self.openPreferences() },
@@ -124,6 +125,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    private func captureScrolling() {
+        Task {
+            guard let result = await captureEngine?.captureScrolling() else {
+                logger.info("Scrolling capture returned nil (user cancelled or failed)")
+                return
+            }
+            handleCapture(result.image, preferredScreen: result.preferredScreen)
+        }
+    }
+
     private func captureDisplay(_ display: CaptureDisplay) {
         Task {
             guard let result = await captureEngine?.captureDisplay(display) else {
