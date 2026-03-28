@@ -65,7 +65,26 @@ struct PreferencesView: View {
             } header: {
                 Text("General")
             }
-            
+
+            Section {
+                Toggle("Add timestamp overlay to screenshots", isOn: $prefs.timestampOverlayEnabled)
+
+                if prefs.timestampOverlayEnabled {
+                    HStack {
+                        Text("Overlay position:")
+                        Spacer()
+                        Picker("", selection: $prefs.timestampOverlayPosition) {
+                            ForEach(OverlayCorner.allCases, id: \.self) { corner in
+                                Text(corner.displayName).tag(corner)
+                            }
+                        }
+                        .frame(width: 120)
+                    }
+                }
+            } header: {
+                Text("Screenshot Overlay")
+            }
+
             Section {
                 ShortcutRow(
                     label: "Fullscreen",

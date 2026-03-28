@@ -6,6 +6,23 @@ import os.log
 
 private let logger = Logger(subsystem: "com.densign.shotter", category: "Preferences")
 
+/// Corner position for timestamp overlay on screenshots
+enum OverlayCorner: String, CaseIterable {
+    case topLeft = "topLeft"
+    case topRight = "topRight"
+    case bottomLeft = "bottomLeft"
+    case bottomRight = "bottomRight"
+
+    var displayName: String {
+        switch self {
+        case .topLeft: return "Top Left"
+        case .topRight: return "Top Right"
+        case .bottomLeft: return "Bottom Left"
+        case .bottomRight: return "Bottom Right"
+        }
+    }
+}
+
 /// Position for the screenshot overlay
 enum OverlayPosition: String, CaseIterable {
     case bottomLeft = "bottomLeft"
@@ -96,6 +113,8 @@ class PreferencesManager: ObservableObject {
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
         static let overlayPosition = "overlayPosition"
+        static let timestampOverlayEnabled = "timestampOverlayEnabled"
+        static let timestampOverlayPosition = "timestampOverlayPosition"
     }
     
     @Published var saveLocation: URL {
@@ -167,6 +186,14 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    @Published var timestampOverlayEnabled: Bool {
+        didSet { defaults.set(timestampOverlayEnabled, forKey: Keys.timestampOverlayEnabled) }
+    }
+
+    @Published var timestampOverlayPosition: OverlayCorner {
+        didSet { defaults.set(timestampOverlayPosition.rawValue, forKey: Keys.timestampOverlayPosition) }
+    }
+
     private func saveShortcut(_ config: ShortcutConfig, forKey key: String) {
         if let data = try? JSONEncoder().encode(config) {
             defaults.set(data, forKey: key)
@@ -235,6 +262,16 @@ class PreferencesManager: ObservableObject {
             overlayPosition = position
         } else {
             overlayPosition = .bottomLeft
+        }
+
+        // Load timestamp overlay preferences
+        timestampOverlayEnabled = defaults.bool(forKey: Keys.timestampOverlayEnabled)
+
+        if let posStr = defaults.string(forKey: Keys.timestampOverlayPosition),
+           let corner = OverlayCorner(rawValue: posStr) {
+            timestampOverlayPosition = corner
+        } else {
+            timestampOverlayPosition = .bottomLeft
         }
 
         defaults.set(actualLaunchAtLogin, forKey: Keys.launchAtLogin)

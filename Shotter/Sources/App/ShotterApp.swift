@@ -137,6 +137,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) {
         let prefs = PreferencesManager.shared
 
+        // Apply timestamp overlay if enabled
+        let processedImage: NSImage
+        if prefs.timestampOverlayEnabled {
+            let frontmostApp = NSWorkspace.shared.frontmostApplication?.localizedName
+            processedImage = TimestampOverlay.apply(
+                to: image,
+                appName: frontmostApp,
+                position: prefs.timestampOverlayPosition
+            )
+        } else {
+            processedImage = image
+        }
+
         // Direct-copy mode: Option held + auto-copy is OFF → copy and skip overlay
         let shouldDirectCopy = directCopy && !prefs.autoCopyToClipboard
 
@@ -149,7 +162,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let result: Result<URL, SaveError>?
         let savedURL: URL?
         if prefs.autoSaveScreenshots {
-            result = saveImage(image)
+            result = saveImage(processedImage)
             savedURL = try? result?.get()
         } else {
             result = nil
@@ -160,7 +173,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Now includes file URL for terminal compatibility (Ghostty, etc.)
         if prefs.autoCopyToClipboard || shouldDirectCopy {
             DispatchQueue.main.async {
-                self.copyToClipboard(image, fileURL: savedURL)
+                self.copyToClipboard(processedImage, fileURL: savedURL)
             }
         }
 
@@ -174,7 +187,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             // When auto-save is disabled (no result), show overlay with save functionality
             if result == nil {
-                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen)
+                self.showOverlayWithManualSave(image: processedImage, preferredScreen: preferredScreen)
                 return
             }
 
@@ -182,11 +195,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             switch result! {
             case .success(let savedURL):
                 self.overlayController?.showOverlay(
-                    image: image,
+                    image: processedImage,
                     savedURL: savedURL,
                     preferredScreen: preferredScreen,
                     onCopy: {
-                        self.copyToClipboard(image, fileURL: savedURL)
+                        self.copyToClipboard(processedImage, fileURL: savedURL)
                     },
                     onSave: {
                         NSWorkspace.shared.activateFileViewerSelecting([savedURL])
@@ -194,7 +207,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     onAnnotate: {
                         DebugLogger.log("Overlay annotate clicked (savedURL available)")
                         self.overlayController?.dismissOverlay()
-                        self.openAnnotationEditor(image: image, savedURL: savedURL, preferredScreen: preferredScreen)
+                        self.openAnnotationEditor(image: processedImage, savedURL: savedURL, preferredScreen: preferredScreen)
                     },
                     onDelete: {
                         self.moveToTrash(savedURL)
@@ -203,7 +216,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .failure(let error):
                 self.showSaveErrorAlert(error: error)
                 // Auto-save failed - show overlay with manual save option to retry
-                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen)
+                self.showOverlayWithManualSave(image: processedImage, preferredScreen: preferredScreen)
             }
         }
     }
