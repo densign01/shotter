@@ -61,6 +61,8 @@ struct PreferencesView: View {
 
                 Toggle("Save screenshots automatically", isOn: $prefs.autoSaveScreenshots)
 
+                Toggle("Smart file naming (include app name)", isOn: $prefs.smartFileNaming)
+
                 Toggle("Launch at login", isOn: $prefs.launchAtLogin)
             } header: {
                 Text("General")

@@ -96,6 +96,7 @@ class PreferencesManager: ObservableObject {
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
         static let overlayPosition = "overlayPosition"
+        static let smartFileNaming = "smartFileNaming"
     }
     
     @Published var saveLocation: URL {
@@ -167,6 +168,12 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    @Published var smartFileNaming: Bool {
+        didSet {
+            defaults.set(smartFileNaming, forKey: Keys.smartFileNaming)
+        }
+    }
+
     private func saveShortcut(_ config: ShortcutConfig, forKey key: String) {
         if let data = try? JSONEncoder().encode(config) {
             defaults.set(data, forKey: key)
@@ -228,6 +235,13 @@ class PreferencesManager: ObservableObject {
         shortcutFullscreen = Self.loadShortcut(from: defaults, forKey: Keys.shortcutFullscreen, default: .defaultFullscreen)
         shortcutArea = Self.loadShortcut(from: defaults, forKey: Keys.shortcutArea, default: .defaultArea)
         shortcutWindow = Self.loadShortcut(from: defaults, forKey: Keys.shortcutWindow, default: .defaultWindow)
+
+        // Load smart file naming preference (default to true)
+        if defaults.object(forKey: Keys.smartFileNaming) == nil {
+            smartFileNaming = true
+        } else {
+            smartFileNaming = defaults.bool(forKey: Keys.smartFileNaming)
+        }
 
         // Load overlay position (default to bottom-left)
         if let positionString = defaults.string(forKey: Keys.overlayPosition),

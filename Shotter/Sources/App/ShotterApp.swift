@@ -135,6 +135,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) {
+        // Capture app context before it might change
+        let frontmostApp = NSWorkspace.shared.frontmostApplication
+        let appName = frontmostApp?.localizedName
+        let windowTitle: String? = {
+            guard let app = frontmostApp else { return nil }
+            let appElement = AXUIElementCreateApplication(app.processIdentifier)
+            var focusedWindow: AnyObject?
+            AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &focusedWindow)
+            var titleValue: AnyObject?
+            if let window = focusedWindow {
+                AXUIElementCopyAttributeValue(window as! AXUIElement, kAXTitleAttribute as CFString, &titleValue)
+            }
+            return titleValue as? String
+        }()
+
         let prefs = PreferencesManager.shared
 
         // Direct-copy mode: Option held + auto-copy is OFF → copy and skip overlay
@@ -149,7 +164,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let result: Result<URL, SaveError>?
         let savedURL: URL?
         if prefs.autoSaveScreenshots {
-            result = saveImage(image)
+            result = saveImage(image, appName: appName, windowTitle: windowTitle)
             savedURL = try? result?.get()
         } else {
             result = nil
@@ -174,7 +189,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async {
             // When auto-save is disabled (no result), show overlay with save functionality
             if result == nil {
-                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen)
+                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen, appName: appName, windowTitle: windowTitle)
                 return
             }
 
@@ -203,13 +218,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .failure(let error):
                 self.showSaveErrorAlert(error: error)
                 // Auto-save failed - show overlay with manual save option to retry
-                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen)
+                self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen, appName: appName, windowTitle: windowTitle)
             }
         }
     }
 
     /// Shows overlay with manual save functionality (when auto-save is disabled)
-    private func showOverlayWithManualSave(image: NSImage, preferredScreen: NSScreen?) {
+    private func showOverlayWithManualSave(image: NSImage, preferredScreen: NSScreen?, appName: String? = nil, windowTitle: String? = nil) {
         self.overlayController?.showOverlay(
             image: image,
             savedURL: nil,
@@ -219,7 +234,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onSave: {
                 // Manual save: save the file, then dismiss overlay
-                let result = self.saveImage(image)
+                let result = self.saveImage(image, appName: appName, windowTitle: windowTitle)
                 switch result {
                 case .success(let url):
                     logger.info("Manual save completed: \(url.path)")
@@ -258,9 +273,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func saveImage(_ image: NSImage) -> Result<URL, SaveError> {
+    private func saveImage(_ image: NSImage, appName: String? = nil, windowTitle: String? = nil) -> Result<URL, SaveError> {
         let saveFolder = PreferencesManager.shared.saveLocation
-        let filename = FileNaming.generateFilename()
+        let filename: String
+        if PreferencesManager.shared.smartFileNaming {
+            filename = FileNaming.generateFilename(appName: appName, windowTitle: windowTitle)
+        } else {
+            filename = FileNaming.generateFilename()
+        }
         let fileURL = saveFolder.appendingPathComponent(filename)
         
         // Ensure directory exists
