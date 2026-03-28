@@ -664,6 +664,40 @@ struct ToolOptionsBar: View {
 
             Spacer()
 
+            // Zoom controls
+            HStack(spacing: 4) {
+                Button(action: { state.zoomOut() }) {
+                    Image(systemName: "minus.magnifyingglass")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .help("Zoom Out (\u{2318}-)")
+
+                // Zoom level picker
+                Picker("", selection: Binding(
+                    get: { closestZoomLevel(state.zoomLevel) },
+                    set: { state.zoomTo($0) }
+                )) {
+                    Text("Fit").tag(CGFloat(0))
+                    Text("50%").tag(CGFloat(0.5))
+                    Text("100%").tag(CGFloat(1.0))
+                    Text("150%").tag(CGFloat(1.5))
+                    Text("200%").tag(CGFloat(2.0))
+                }
+                .pickerStyle(.menu)
+                .frame(width: 65)
+
+                Button(action: { state.zoomIn() }) {
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .help("Zoom In (\u{2318}+)")
+            }
+
+            Divider()
+                .frame(height: 20)
+
             // Keyboard shortcut hints (always visible)
             Text(keyboardHint)
                 .font(.caption2)
@@ -673,6 +707,12 @@ struct ToolOptionsBar: View {
         .padding(.vertical, 8)
         .frame(height: 44)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    private func closestZoomLevel(_ value: CGFloat) -> CGFloat {
+        if value == 0 { return 0 }
+        let levels: [CGFloat] = [0.5, 1.0, 1.5, 2.0]
+        return levels.min(by: { abs($0 - value) < abs($1 - value) }) ?? 1.0
     }
 
     private func closestStrokeSize(_ value: CGFloat) -> CGFloat {

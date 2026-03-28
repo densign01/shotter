@@ -17,6 +17,8 @@ class AnnotationEditorState: ObservableObject {
     @Published var nextCounterNumber: Int = 1
     @Published var cropRect: CGRect? = nil
     @Published private(set) var canvasFocusRequestID: Int = 0
+    @Published var zoomLevel: CGFloat = 0 // 0 means "fit to window"
+    @Published var panOffset: CGPoint = .zero
 
     // Modifier keys
     var isShiftKeyHeld: Bool = false
@@ -335,6 +337,32 @@ class AnnotationEditorState: ObservableObject {
         setTool(.select)
     }
 
+    // MARK: - Zoom
+
+    func zoomIn() {
+        if zoomLevel == 0 {
+            zoomLevel = 1.0
+        }
+        zoomLevel = min(zoomLevel * 1.5, 5.0)
+        // Don't reset panOffset - user may want to stay in same area
+    }
+
+    func zoomOut() {
+        zoomLevel = max(zoomLevel / 1.5, 0.25)
+    }
+
+    func zoomToFit() {
+        zoomLevel = 0
+        panOffset = .zero
+    }
+
+    func zoomTo(_ level: CGFloat) {
+        zoomLevel = level
+        if level == 0 {
+            panOffset = .zero
+        }
+    }
+
     // MARK: - Rendering
     
     /// Render the final image with all annotations
@@ -430,6 +458,15 @@ extension AnnotationEditorState {
                 if selectedAnnotationId == nil, let first = annotations.first {
                     selectAnnotation(first.id)
                 }
+                return true
+            case "=", "+":
+                zoomIn()
+                return true
+            case "-":
+                zoomOut()
+                return true
+            case "0":
+                zoomToFit()
                 return true
             default:
                 break

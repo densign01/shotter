@@ -161,9 +161,23 @@ class AnnotationCanvasView: NSView {
     private func imageRectInView() -> CGRect {
         guard let state = state else { return .zero }
 
-        let imageRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
-        scale = imageRect.width / state.imageSize.width
-        return imageRect
+        if state.zoomLevel == 0 {
+            // Fit to window (existing behavior)
+            let imageRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
+            scale = imageRect.width / state.imageSize.width
+            return imageRect
+        } else {
+            // Custom zoom level
+            let zoomedWidth = state.imageSize.width * state.zoomLevel
+            let zoomedHeight = state.imageSize.height * state.zoomLevel
+            scale = state.zoomLevel
+
+            // Center the image, then apply pan offset
+            let x = (bounds.width - zoomedWidth) / 2 + state.panOffset.x
+            let y = (bounds.height - zoomedHeight) / 2 + state.panOffset.y
+
+            return CGRect(x: x, y: y, width: zoomedWidth, height: zoomedHeight)
+        }
     }
     
     private func drawCheckerboard(in rect: CGRect, context: CGContext) {
@@ -359,6 +373,32 @@ class AnnotationCanvasView: NSView {
         NSCursor.arrow.set()
     }
     
+    // MARK: - Scroll & Zoom Gestures
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let state = state, state.zoomLevel > 0 else {
+            super.scrollWheel(with: event)
+            return
+        }
+
+        // Pan the view
+        state.panOffset.x += event.scrollingDeltaX
+        state.panOffset.y -= event.scrollingDeltaY
+        needsDisplay = true
+    }
+
+    override func magnify(with event: NSEvent) {
+        guard let state = state else { return }
+
+        if state.zoomLevel == 0 {
+            state.zoomLevel = imageRectInView().width / state.imageSize.width
+        }
+
+        let newZoom = state.zoomLevel * (1 + event.magnification)
+        state.zoomLevel = max(0.25, min(5.0, newZoom))
+        needsDisplay = true
+    }
+
     // MARK: - Keyboard Events
     
     override func keyDown(with event: NSEvent) {
