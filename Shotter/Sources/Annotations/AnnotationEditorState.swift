@@ -335,6 +335,17 @@ class AnnotationEditorState: ObservableObject {
         setTool(.select)
     }
 
+    /// Replace the base image (used by mockup/background editor)
+    func replaceBaseImage(_ newImage: NSImage) {
+        baseImage = newImage
+        imageSize = newImage.size
+        annotations.removeAll()
+        selectedAnnotationId = nil
+        undoStack.removeAll()
+        redoStack.removeAll()
+        objectWillChange.send()
+    }
+
     // MARK: - Rendering
     
     /// Render the final image with all annotations

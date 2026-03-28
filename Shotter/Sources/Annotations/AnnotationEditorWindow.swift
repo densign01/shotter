@@ -330,21 +330,23 @@ struct AnnotationEditorView: View {
     let onSave: () -> Void
     let onCopy: () -> Void
     let onCancel: () -> Void
-    
+
+    @State private var showMockupEditor = false
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 // Toolbar
-                AnnotationToolbar(state: state, onSave: onSave, onCopy: onCopy, onCancel: onCancel)
-                
+                AnnotationToolbar(state: state, showMockupEditor: $showMockupEditor, onSave: onSave, onCopy: onCopy, onCancel: onCancel)
+
                 Divider()
-                
+
                 // Canvas
                 GeometryReader { geometry in
                     ZStack {
                         AnnotationCanvasRepresentable(state: state)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        
+
                         // Text editor overlay
                         if state.editingTextAnnotationId != nil {
                             TextEditorOverlay(
@@ -355,13 +357,25 @@ struct AnnotationEditorView: View {
                         }
                     }
                 }
-                
+
                 // Bottom bar with tool options (always visible for consistent layout)
                 Divider()
                 ToolOptionsBar(state: state)
                 DragMeBar(state: state)
             }
             .background(Color(NSColor.controlBackgroundColor))
+        }
+        .sheet(isPresented: $showMockupEditor) {
+            MockupEditorView(
+                sourceImage: state.renderFinalImage() ?? state.baseImage,
+                onApply: { resultImage in
+                    state.replaceBaseImage(resultImage)
+                    showMockupEditor = false
+                },
+                onCancel: {
+                    showMockupEditor = false
+                }
+            )
         }
     }
     
@@ -382,10 +396,11 @@ struct AnnotationEditorView: View {
 
 struct AnnotationToolbar: View {
     @ObservedObject var state: AnnotationEditorState
+    @Binding var showMockupEditor: Bool
     let onSave: () -> Void
     let onCopy: () -> Void
     let onCancel: () -> Void
-    
+
     var body: some View {
         HStack(spacing: 12) {
             // Tool buttons
@@ -404,9 +419,9 @@ struct AnnotationToolbar: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(NSColor.controlBackgroundColor))
             )
-            
+
             Spacer()
-            
+
             // Undo/Redo
             HStack(spacing: 4) {
                 HoverIconButton(icon: "arrow.uturn.backward", tooltip: "Undo (⌘Z)", action: { state.undo() })
@@ -415,6 +430,13 @@ struct AnnotationToolbar: View {
                 HoverIconButton(icon: "arrow.uturn.forward", tooltip: "Redo (⌘⇧Z)", action: { state.redo() })
                     .disabled(!state.canRedo)
             }
+
+            Divider()
+                .frame(height: 24)
+
+            HoverIconButton(icon: "macwindow.on.rectangle", tooltip: "Add Background & Frame", action: {
+                showMockupEditor = true
+            })
 
             Divider()
                 .frame(height: 24)
