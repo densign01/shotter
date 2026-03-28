@@ -14,7 +14,8 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
     case eraser = "Eraser"
     case crop = "Crop"
     case textHighlight = "Text Highlight"
-    
+    case autoRedact = "Auto-Redact"
+
     var id: String { rawValue }
     
     var icon: String {
@@ -30,9 +31,10 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
         case .eraser: return "eraser"
         case .crop: return "crop"
         case .textHighlight: return "highlighter"
+        case .autoRedact: return "eye.slash"
         }
     }
-    
+
     var tooltip: String {
         switch self {
         case .select: return "Select and move annotations (V)"
@@ -46,9 +48,10 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
         case .eraser: return "Click annotation to remove (X)"
         case .crop: return "Crop screenshot"
         case .textHighlight: return "Text Highlight (H)"
+        case .autoRedact: return "Auto-detect & blur sensitive info"
         }
     }
-    
+
     var shortcut: Character? {
         switch self {
         case .select: return "v"
@@ -62,6 +65,7 @@ enum AnnotationToolType: String, CaseIterable, Identifiable {
         case .eraser: return "x"
         case .crop: return nil
         case .textHighlight: return "h"
+        case .autoRedact: return nil
         }
     }
 }
@@ -634,6 +638,44 @@ class TextHighlightTool: AnnotationTool {
     }
 }
 
+// MARK: - Auto-Redact Tool
+
+class AutoRedactTool: AnnotationTool {
+    let toolType: AnnotationToolType = .autoRedact
+    var cursor: NSCursor { .arrow }
+
+    func mouseDown(at point: CGPoint, state: AnnotationEditorState) {
+        // Auto-redact is triggered on tool selection, not mouse click
+        // Run detection and add blur annotations
+        Task { @MainActor in
+            let regions = await SensitiveDataDetector.detect(in: state.baseImage)
+
+            guard !regions.isEmpty else {
+                // No sensitive data found - could show an alert
+                return
+            }
+
+            for region in regions {
+                let imageRect = SensitiveDataDetector.convertToImageCoordinates(region, imageSize: state.imageSize)
+
+                // Add some padding
+                let paddedRect = imageRect.insetBy(dx: -4, dy: -2)
+
+                // Create blur annotation for each detected region
+                var blur = BlurAnnotation(bounds: paddedRect, blurRadius: 20)
+                blur.isSelected = false
+                state.addAnnotation(blur)
+            }
+
+            // Switch to select tool after redacting
+            state.setTool(.select)
+        }
+    }
+
+    func mouseDragged(to point: CGPoint, state: AnnotationEditorState) {}
+    func mouseUp(at point: CGPoint, state: AnnotationEditorState) {}
+}
+
 // MARK: - Tool Factory
 
 struct AnnotationToolFactory {
@@ -650,6 +692,7 @@ struct AnnotationToolFactory {
         case .eraser: return EraserTool()
         case .crop: return CropTool()
         case .textHighlight: return TextHighlightTool()
+        case .autoRedact: return AutoRedactTool()
         }
     }
 }

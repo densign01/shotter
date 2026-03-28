@@ -606,7 +606,7 @@ struct ToolOptionsBar: View {
     var body: some View {
         HStack(spacing: 16) {
             // Tool-specific options (not for select, eraser, or crop tools)
-            if ![.select, .eraser, .crop].contains(state.currentToolType) {
+            if ![.select, .eraser, .crop, .autoRedact].contains(state.currentToolType) {
                 // Color swatches with selection ring and hover effect
                 HStack(spacing: 6) {
                     ForEach(presetColors, id: \.self) { color in
@@ -724,6 +724,8 @@ struct ToolOptionsBar: View {
             return "Drag to select crop area"
         case .textHighlight:
             return "Drag to highlight"
+        case .autoRedact:
+            return "Click to auto-detect and blur sensitive information"
         }
     }
 }

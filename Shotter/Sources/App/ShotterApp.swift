@@ -282,6 +282,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try pngData.write(to: fileURL)
             logger.info("Screenshot saved to: \(fileURL.path)")
+            // Index for search
+            ScreenshotIndexer.shared.indexScreenshot(at: fileURL, appName: nil)
             return .success(fileURL)
         } catch {
             logger.error("Failed to write image file: \(error.localizedDescription)")
@@ -340,6 +342,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try FileManager.default.trashItem(at: fileURL, resultingItemURL: nil)
             logger.info("Screenshot moved to trash: \(fileURL.path)")
+            ScreenshotIndexer.shared.removeFromIndex(at: fileURL)
         } catch {
             logger.error("Failed to move screenshot to trash: \(error.localizedDescription)")
         }
