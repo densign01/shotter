@@ -17,7 +17,7 @@ class AnnotationEditorState: ObservableObject {
     @Published var nextCounterNumber: Int = 1
     @Published var cropRect: CGRect? = nil
     @Published private(set) var canvasFocusRequestID: Int = 0
-    @Published var isDetectingRedactions: Bool = false
+    @Published var isAutoRedacting: Bool = false
 
     // Modifier keys
     var isShiftKeyHeld: Bool = false
@@ -338,18 +338,30 @@ class AnnotationEditorState: ObservableObject {
 
     // MARK: - Auto-Redact
 
-    func autoRedact() async {
-        let regions = await AutoRedact.detectSensitiveRegions(in: baseImage)
-        for region in regions {
-            // Convert Vision normalized coords (origin bottom-left) to image coords (origin top-left)
-            let imageRect = CGRect(
-                x: region.boundingBox.origin.x * imageSize.width,
-                y: (1 - region.boundingBox.origin.y - region.boundingBox.height) * imageSize.height,
-                width: region.boundingBox.width * imageSize.width,
-                height: region.boundingBox.height * imageSize.height
-            )
-            let blur = BlurAnnotation(bounds: imageRect, blurRadius: 20)
-            addAnnotation(blur)
+    /// Run on-device OCR to detect sensitive data and add blur annotations over each match.
+    func autoRedact() {
+        guard !isAutoRedacting else { return }
+        isAutoRedacting = true
+
+        let image = baseImage
+        Task {
+            let detectedItems = await SensitiveDataDetector.detect(in: image)
+
+            await MainActor.run {
+                if !detectedItems.isEmpty {
+                    self.saveUndoState()
+                    for item in detectedItems {
+                        // Add padding around detected text for better coverage
+                        let paddedBounds = item.bounds.insetBy(dx: -4, dy: -2)
+                        let blur = BlurAnnotation(bounds: paddedBounds, blurRadius: 20)
+                        self.annotations.append(AnyAnnotation(blur))
+                    }
+                    DebugLogger.log("Auto-redact: added \(detectedItems.count) blur annotations")
+                } else {
+                    DebugLogger.log("Auto-redact: no sensitive data detected")
+                }
+                self.isAutoRedacting = false
+            }
         }
     }
 

@@ -409,19 +409,18 @@ struct AnnotationToolbar: View {
 
             // Auto-Redact
             HoverIconButton(
-                icon: "shield.lefthalf.filled",
-                tooltip: "Auto-redact sensitive information"
-            ) {
-                Task {
-                    state.isDetectingRedactions = true
-                    await state.autoRedact()
-                    state.isDetectingRedactions = false
+                icon: "eye.slash",
+                tooltip: "Auto-Redact Sensitive Data",
+                action: { state.autoRedact() }
+            )
+            .disabled(state.isAutoRedacting)
+            .overlay {
+                if state.isAutoRedacting {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                        .frame(width: 28, height: 28)
                 }
             }
-            .disabled(state.isDetectingRedactions)
-
-            Divider()
-                .frame(height: 24)
 
             // Undo/Redo
             HStack(spacing: 4) {
