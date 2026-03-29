@@ -18,10 +18,6 @@ class AnnotationEditorState: ObservableObject {
     @Published var cropRect: CGRect? = nil
     @Published private(set) var canvasFocusRequestID: Int = 0
 
-    // Mockup
-    @Published var showMockupPanel: Bool = false
-    @Published var mockupConfig = MockupConfiguration()
-
     // Modifier keys
     var isShiftKeyHeld: Bool = false
     
@@ -341,27 +337,18 @@ class AnnotationEditorState: ObservableObject {
 
     // MARK: - Mockup
 
-    func applyMockup() {
-        let config = mockupConfig
-        guard config.frame != .none || config.backgroundStyle != .none else { return }
-
-        // Render the current image with all annotations
-        guard let currentImage = renderFinalImage() else { return }
-
-        // Apply mockup
-        let mockupImage = MockupRenderer.render(image: currentImage, config: config)
-
-        // Replace the base image and clear annotations (they're baked in)
+    /// Replace the base image with a mockup-rendered version.
+    /// This clears all annotations since they won't align with the new image dimensions.
+    func applyMockup(_ mockupImage: NSImage) {
+        saveUndoCheckpoint()
         baseImage = mockupImage
         imageSize = mockupImage.size
+        hasMockupApplied = true
+        // Clear annotations since they won't align with the new image
         annotations.removeAll()
+        selectedAnnotationId = nil
         undoStack.removeAll()
         redoStack.removeAll()
-        hasBeenCropped = true  // Mark as modified
-        showMockupPanel = false
-
-        // Reset mockup config
-        mockupConfig = MockupConfiguration()
     }
 
     // MARK: - Rendering

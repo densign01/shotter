@@ -330,26 +330,29 @@ struct AnnotationEditorView: View {
     let onSave: () -> Void
     let onCopy: () -> Void
     let onCancel: () -> Void
-    
+
+    @State private var showMockupEditor = false
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 // Toolbar
-                AnnotationToolbar(state: state, onSave: onSave, onCopy: onCopy, onCancel: onCancel)
+                AnnotationToolbar(
+                    state: state,
+                    onSave: onSave,
+                    onCopy: onCopy,
+                    onCancel: onCancel,
+                    onMockup: { showMockupEditor = true }
+                )
 
                 Divider()
-
-                if state.showMockupPanel {
-                    MockupPanel(state: state)
-                    Divider()
-                }
 
                 // Canvas
                 GeometryReader { geometry in
                     ZStack {
                         AnnotationCanvasRepresentable(state: state)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        
+
                         // Text editor overlay
                         if state.editingTextAnnotationId != nil {
                             TextEditorOverlay(
@@ -360,13 +363,25 @@ struct AnnotationEditorView: View {
                         }
                     }
                 }
-                
+
                 // Bottom bar with tool options (always visible for consistent layout)
                 Divider()
                 ToolOptionsBar(state: state)
                 DragMeBar(state: state)
             }
             .background(Color(NSColor.controlBackgroundColor))
+        }
+        .sheet(isPresented: $showMockupEditor) {
+            MockupEditorView(
+                sourceImage: state.baseImage,
+                onApply: { mockupImage in
+                    state.applyMockup(mockupImage)
+                    showMockupEditor = false
+                },
+                onCancel: {
+                    showMockupEditor = false
+                }
+            )
         }
     }
     
@@ -390,7 +405,8 @@ struct AnnotationToolbar: View {
     let onSave: () -> Void
     let onCopy: () -> Void
     let onCancel: () -> Void
-    
+    let onMockup: () -> Void
+
     var body: some View {
         HStack(spacing: 12) {
             // Tool buttons
@@ -409,28 +425,8 @@ struct AnnotationToolbar: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(NSColor.controlBackgroundColor))
             )
-            
-            Spacer()
 
-            // Mockup button
-            Button(action: {
-                state.showMockupPanel.toggle()
-            }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "macwindow")
-                        .font(.system(size: 12))
-                    Text("Mockup")
-                        .font(.system(size: 11))
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(state.showMockupPanel ? Color.accentColor.opacity(0.2) : Color.gray.opacity(0.1))
-                )
-            }
-            .buttonStyle(.plain)
-            .help("Add device frame and background")
+            Spacer()
 
             // Undo/Redo
             HStack(spacing: 4) {
@@ -440,6 +436,9 @@ struct AnnotationToolbar: View {
                 HoverIconButton(icon: "arrow.uturn.forward", tooltip: "Redo (⌘⇧Z)", action: { state.redo() })
                     .disabled(!state.canRedo)
             }
+
+            // Mockup button
+            HoverIconButton(icon: "macwindow", tooltip: "Add Mockup", action: onMockup)
 
             Divider()
                 .frame(height: 24)
@@ -612,107 +611,6 @@ struct ColorSwatchButton: View {
         .help(colorName)
         .accessibilityLabel(Text(colorName))
         .accessibilityValue(Text(isSelected ? "Selected" : "Not selected"))
-    }
-}
-
-// MARK: - Mockup Panel
-
-struct MockupPanel: View {
-    @ObservedObject var state: AnnotationEditorState
-
-    private let gradientPresets: [(String, NSColor, NSColor)] = [
-        ("Blue-Purple", .systemBlue, .systemPurple),
-        ("Pink-Orange", .systemPink, .systemOrange),
-        ("Green-Teal", .systemGreen, .systemTeal),
-        ("Indigo-Pink", .systemIndigo, .systemPink),
-    ]
-
-    var body: some View {
-        HStack(spacing: 16) {
-            // Frame picker
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Frame")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Picker("", selection: $state.mockupConfig.frame) {
-                    ForEach(MockupFrame.allCases) { frame in
-                        Text(frame.rawValue).tag(frame)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 140)
-            }
-
-            Divider().frame(height: 30)
-
-            // Background style
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Background")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Picker("", selection: $state.mockupConfig.backgroundStyle) {
-                    ForEach(BackgroundStyle.allCases) { style in
-                        Text(style.rawValue).tag(style)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 110)
-            }
-
-            if state.mockupConfig.backgroundStyle != .none {
-                // Gradient presets
-                HStack(spacing: 4) {
-                    ForEach(gradientPresets, id: \.0) { name, start, end in
-                        Button(action: {
-                            state.mockupConfig.backgroundColor = start
-                            state.mockupConfig.gradientEndColor = end
-                            if state.mockupConfig.backgroundStyle == .solid {
-                                state.mockupConfig.backgroundStyle = .gradient
-                            }
-                        }) {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(start), Color(end)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .frame(width: 20, height: 20)
-                        }
-                        .buttonStyle(.plain)
-                        .help(name)
-                    }
-                }
-
-                // Padding slider
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Padding")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Slider(value: $state.mockupConfig.padding, in: 0...100, step: 10)
-                        .frame(width: 80)
-                }
-            }
-
-            Spacer()
-
-            // Apply button
-            Button(action: {
-                state.applyMockup()
-            }) {
-                Text("Apply")
-                    .font(.system(size: 12, weight: .medium))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.accentColor))
-                    .foregroundColor(.white)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color(NSColor.windowBackgroundColor))
     }
 }
 
