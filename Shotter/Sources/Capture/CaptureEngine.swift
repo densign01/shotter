@@ -27,6 +27,13 @@ struct AreaCaptureResult {
 struct CaptureResult {
     let image: NSImage
     let preferredScreen: NSScreen?
+    let sourceAppName: String?
+
+    init(image: NSImage, preferredScreen: NSScreen?, sourceAppName: String? = nil) {
+        self.image = image
+        self.preferredScreen = preferredScreen
+        self.sourceAppName = sourceAppName
+    }
 }
 
 class CaptureEngine {
@@ -42,6 +49,12 @@ class CaptureEngine {
     private var preCaptureTimestamp: Date?
     private var isPreCapturing = false
     private static let preCaptureTimeout: TimeInterval = 0.5
+
+    /// Snapshot the frontmost application name before capture UI appears.
+    @MainActor
+    private func captureFrontmostAppName() -> String? {
+        return NSWorkspace.shared.frontmostApplication?.localizedName
+    }
 
     init(hotkeyManager: HotkeyManager? = nil) {
         self.hotkeyManager = hotkeyManager
@@ -108,15 +121,19 @@ class CaptureEngine {
 
     /// Capture the display at cursor position (default behavior)
     func captureFullscreen() async -> CaptureResult? {
+        let appName = await captureFrontmostAppName()
         guard let display = await getDisplayAtCursor() else {
             logger.warning("No display available for fullscreen capture")
             return nil
         }
-        return await captureDisplay(display)
+        guard var result = await captureDisplay(display) else { return nil }
+        result = CaptureResult(image: result.image, preferredScreen: result.preferredScreen, sourceAppName: appName)
+        return result
     }
 
     /// Capture a specific display
     func captureDisplay(_ display: CaptureDisplay) async -> CaptureResult? {
+        let appName = await captureFrontmostAppName()
         guard let cgImage = await captureDisplayCGImage(display) else {
             return nil
         }
@@ -124,7 +141,8 @@ class CaptureEngine {
         let imageSize = display.screen?.frame.size ?? CGSize(width: display.scDisplay.width, height: display.scDisplay.height)
         return CaptureResult(
             image: NSImage(cgImage: cgImage, size: imageSize),
-            preferredScreen: display.screen
+            preferredScreen: display.screen,
+            sourceAppName: appName
         )
     }
 
@@ -196,6 +214,7 @@ class CaptureEngine {
     // MARK: - Area Capture
 
     func captureArea() async -> CaptureResult? {
+        let appName = await captureFrontmostAppName()
         let displays = await getAvailableDisplays()
         var screenCaptures: [(screen: NSScreen, image: CGImage)]
 
@@ -238,7 +257,8 @@ class CaptureEngine {
             if let image = composeAreaCapture(from: capturedDisplays, selectionRect: areaResult.globalRect) {
                 return CaptureResult(
                     image: image,
-                    preferredScreen: preferredScreen(for: areaResult.globalRect, displays: intersecting)
+                    preferredScreen: preferredScreen(for: areaResult.globalRect, displays: intersecting),
+                    sourceAppName: appName
                 )
             }
 
@@ -402,6 +422,7 @@ class CaptureEngine {
 
     /// Capture a specific window
     func captureWindow(_ window: SCWindow) async -> CaptureResult? {
+        let appName = window.owningApplication?.applicationName ?? (await captureFrontmostAppName())
         let windowCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
         let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
         let cocoaCenter = NSPoint(x: windowCenter.x, y: mainScreenHeight - windowCenter.y)
@@ -428,7 +449,8 @@ class CaptureEngine {
             )
             return CaptureResult(
                 image: NSImage(cgImage: image, size: NSSize(width: window.frame.width, height: window.frame.height)),
-                preferredScreen: containingScreen
+                preferredScreen: containingScreen,
+                sourceAppName: appName
             )
         } catch {
             logger.error("Failed to capture window: \(error.localizedDescription)")

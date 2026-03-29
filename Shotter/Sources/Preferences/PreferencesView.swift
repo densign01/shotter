@@ -67,6 +67,27 @@ struct PreferencesView: View {
             }
             
             Section {
+                Toggle("Add timestamp overlay", isOn: $prefs.timestampOverlayEnabled)
+
+                if prefs.timestampOverlayEnabled {
+                    HStack {
+                        Text("Badge position:")
+                        Spacer()
+                        Picker("", selection: $prefs.timestampOverlayPosition) {
+                            ForEach(OverlayCorner.allCases, id: \.self) { corner in
+                                Text(corner.displayName).tag(corner)
+                            }
+                        }
+                        .frame(width: 140)
+                    }
+
+                    Toggle("Include app name", isOn: $prefs.timestampOverlayIncludeAppName)
+                }
+            } header: {
+                Text("Screenshot Overlay")
+            }
+
+            Section {
                 ShortcutRow(
                     label: "Fullscreen",
                     shortcut: $prefs.shortcutFullscreen,
@@ -141,7 +162,7 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 480)
+        .frame(width: 480, height: 580)
         .alert("Launch at Login Failed", isPresented: Binding(
             get: { prefs.launchAtLoginErrorMessage != nil },
             set: { isPresented in

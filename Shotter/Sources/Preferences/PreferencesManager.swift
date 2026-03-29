@@ -19,6 +19,23 @@ enum OverlayPosition: String, CaseIterable {
     }
 }
 
+/// Corner position for the timestamp overlay badge
+enum OverlayCorner: String, CaseIterable {
+    case topLeft = "topLeft"
+    case topRight = "topRight"
+    case bottomLeft = "bottomLeft"
+    case bottomRight = "bottomRight"
+
+    var displayName: String {
+        switch self {
+        case .topLeft: return "Top Left"
+        case .topRight: return "Top Right"
+        case .bottomLeft: return "Bottom Left"
+        case .bottomRight: return "Bottom Right"
+        }
+    }
+}
+
 /// Represents a keyboard shortcut configuration
 struct ShortcutConfig: Codable, Equatable {
     var keyCode: Int
@@ -96,6 +113,9 @@ class PreferencesManager: ObservableObject {
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
         static let overlayPosition = "overlayPosition"
+        static let timestampOverlayEnabled = "timestampOverlayEnabled"
+        static let timestampOverlayPosition = "timestampOverlayPosition"
+        static let timestampOverlayIncludeAppName = "timestampOverlayIncludeAppName"
     }
     
     @Published var saveLocation: URL {
@@ -167,6 +187,24 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    @Published var timestampOverlayEnabled: Bool {
+        didSet {
+            defaults.set(timestampOverlayEnabled, forKey: Keys.timestampOverlayEnabled)
+        }
+    }
+
+    @Published var timestampOverlayPosition: OverlayCorner {
+        didSet {
+            defaults.set(timestampOverlayPosition.rawValue, forKey: Keys.timestampOverlayPosition)
+        }
+    }
+
+    @Published var timestampOverlayIncludeAppName: Bool {
+        didSet {
+            defaults.set(timestampOverlayIncludeAppName, forKey: Keys.timestampOverlayIncludeAppName)
+        }
+    }
+
     private func saveShortcut(_ config: ShortcutConfig, forKey key: String) {
         if let data = try? JSONEncoder().encode(config) {
             defaults.set(data, forKey: key)
@@ -235,6 +273,22 @@ class PreferencesManager: ObservableObject {
             overlayPosition = position
         } else {
             overlayPosition = .bottomLeft
+        }
+
+        // Load timestamp overlay preferences
+        timestampOverlayEnabled = defaults.bool(forKey: Keys.timestampOverlayEnabled)
+
+        if let cornerString = defaults.string(forKey: Keys.timestampOverlayPosition),
+           let corner = OverlayCorner(rawValue: cornerString) {
+            timestampOverlayPosition = corner
+        } else {
+            timestampOverlayPosition = .bottomLeft
+        }
+
+        if defaults.object(forKey: Keys.timestampOverlayIncludeAppName) == nil {
+            timestampOverlayIncludeAppName = true
+        } else {
+            timestampOverlayIncludeAppName = defaults.bool(forKey: Keys.timestampOverlayIncludeAppName)
         }
 
         defaults.set(actualLaunchAtLogin, forKey: Keys.launchAtLogin)
