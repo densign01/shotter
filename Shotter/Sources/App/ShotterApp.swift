@@ -135,6 +135,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func handleCapture(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) {
+        Task {
+            await handleCaptureAsync(image, preferredScreen: preferredScreen, directCopy: directCopy)
+        }
+    }
+
+    private func handleCaptureAsync(_ image: NSImage, preferredScreen: NSScreen? = nil, directCopy: Bool = false) async {
         let prefs = PreferencesManager.shared
 
         // Direct-copy mode: Option held + auto-copy is OFF → copy and skip overlay
@@ -145,11 +151,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             SoundManager.shared.playCaptureSound()
         }
 
+        // Generate filename (smart or timestamp-based)
+        let filename: String
+        if prefs.smartFileNaming {
+            filename = await SmartFileNaming.generateSmartFilename(for: image)
+        } else {
+            filename = FileNaming.generateFilename()
+        }
+
         // Only save immediately if auto-save is enabled
         let result: Result<URL, SaveError>?
         let savedURL: URL?
         if prefs.autoSaveScreenshots {
-            result = saveImage(image)
+            result = saveImage(image, filename: filename)
             savedURL = try? result?.get()
         } else {
             result = nil
@@ -258,10 +272,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func saveImage(_ image: NSImage) -> Result<URL, SaveError> {
+    private func saveImage(_ image: NSImage, filename: String? = nil) -> Result<URL, SaveError> {
         let saveFolder = PreferencesManager.shared.saveLocation
-        let filename = FileNaming.generateFilename()
-        let fileURL = saveFolder.appendingPathComponent(filename)
+        let resolvedFilename = filename ?? FileNaming.generateFilename()
+        let fileURL = saveFolder.appendingPathComponent(resolvedFilename)
         
         // Ensure directory exists
         do {
