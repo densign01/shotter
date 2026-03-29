@@ -8,6 +8,7 @@ struct PreferencesView: View {
         case fullscreen
         case area
         case window
+        case scrollingCapture
     }
     
     var body: some View {
@@ -112,11 +113,37 @@ struct PreferencesView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Toggle("Scrolling Capture", isOn: Binding(
+                            get: { prefs.shortcutScrollingCapture.isEnabled },
+                            set: { enabled in
+                                var config = prefs.shortcutScrollingCapture
+                                config.isEnabled = enabled
+                                prefs.shortcutScrollingCapture = config
+                            }
+                        ))
+                        Spacer()
+                        if prefs.shortcutScrollingCapture.isEnabled {
+                            ShortcutBadge(shortcut: prefs.shortcutScrollingCapture)
+                            Button("Change") {
+                                recordingShortcut = .scrollingCapture
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                        }
+                    }
+                    Text("Capture a scrolling window by automatically scrolling and stitching")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 Button("Reset to Defaults") {
                     prefs.shortcutFullscreen = .defaultFullscreen
                     prefs.shortcutArea = .defaultArea
                     prefs.shortcutWindow = .defaultWindow
+                    prefs.shortcutScrollingCapture = .defaultScrollingCapture
                 }
                 .foregroundColor(.secondary)
             } header: {

@@ -7,16 +7,18 @@ class MenuBarController: NSObject {
     private let onCaptureFullscreen: () -> Void
     private let onCaptureArea: () -> Void
     private let onCaptureWindow: () -> Void
+    private let onCaptureScrollingWindow: () -> Void
     private let onCaptureDisplay: (CaptureDisplay) -> Void
     private let onOpenSaveFolder: () -> Void
     private let onOpenPreferences: () -> Void
     private let onQuit: () -> Void
     private let getDisplays: () async -> [CaptureDisplay]
-    
+
     init(
         onCaptureFullscreen: @escaping () -> Void,
         onCaptureArea: @escaping () -> Void,
         onCaptureWindow: @escaping () -> Void,
+        onCaptureScrollingWindow: @escaping () -> Void,
         onCaptureDisplay: @escaping (CaptureDisplay) -> Void,
         onOpenSaveFolder: @escaping () -> Void,
         onOpenPreferences: @escaping () -> Void,
@@ -26,6 +28,7 @@ class MenuBarController: NSObject {
         self.onCaptureFullscreen = onCaptureFullscreen
         self.onCaptureArea = onCaptureArea
         self.onCaptureWindow = onCaptureWindow
+        self.onCaptureScrollingWindow = onCaptureScrollingWindow
         self.onCaptureDisplay = onCaptureDisplay
         self.onOpenSaveFolder = onOpenSaveFolder
         self.onOpenPreferences = onOpenPreferences
@@ -82,7 +85,17 @@ class MenuBarController: NSObject {
         windowItem.keyEquivalent = "5"
         windowItem.target = self
         menu.addItem(windowItem)
-        
+
+        let scrollingItem = NSMenuItem(
+            title: "Capture Scrolling Window",
+            action: #selector(captureScrollingWindowClicked),
+            keyEquivalent: ""
+        )
+        scrollingItem.keyEquivalentModifierMask = [.command, .shift]
+        scrollingItem.keyEquivalent = "6"
+        scrollingItem.target = self
+        menu.addItem(scrollingItem)
+
         menu.addItem(NSMenuItem.separator())
         
         // Capture Display submenu (populated dynamically)
@@ -160,6 +173,10 @@ class MenuBarController: NSObject {
     
     @objc private func captureWindowClicked() {
         onCaptureWindow()
+    }
+
+    @objc private func captureScrollingWindowClicked() {
+        onCaptureScrollingWindow()
     }
     
     @objc private func captureDisplayClicked(_ sender: NSMenuItem) {

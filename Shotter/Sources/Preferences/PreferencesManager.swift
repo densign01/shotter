@@ -77,6 +77,13 @@ struct ShortcutConfig: Codable, Equatable {
         modifiers: Int(CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue),
         isEnabled: false  // Disabled by default; users can enable if they want direct window shortcut
     )
+
+    /// Default ⌘⇧6 for scrolling capture (disabled by default)
+    static let defaultScrollingCapture = ShortcutConfig(
+        keyCode: 22,  // "6"
+        modifiers: Int(CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue),
+        isEnabled: false  // Disabled by default; users can enable if they want scrolling capture
+    )
 }
 
 class PreferencesManager: ObservableObject {
@@ -95,6 +102,7 @@ class PreferencesManager: ObservableObject {
         static let shortcutFullscreen = "shortcutFullscreen"
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
+        static let shortcutScrollingCapture = "shortcutScrollingCapture"
         static let overlayPosition = "overlayPosition"
     }
     
@@ -157,6 +165,13 @@ class PreferencesManager: ObservableObject {
     @Published var shortcutWindow: ShortcutConfig {
         didSet {
             saveShortcut(shortcutWindow, forKey: Keys.shortcutWindow)
+            NotificationCenter.default.post(name: .shortcutsDidChange, object: nil)
+        }
+    }
+
+    @Published var shortcutScrollingCapture: ShortcutConfig {
+        didSet {
+            saveShortcut(shortcutScrollingCapture, forKey: Keys.shortcutScrollingCapture)
             NotificationCenter.default.post(name: .shortcutsDidChange, object: nil)
         }
     }
@@ -228,6 +243,7 @@ class PreferencesManager: ObservableObject {
         shortcutFullscreen = Self.loadShortcut(from: defaults, forKey: Keys.shortcutFullscreen, default: .defaultFullscreen)
         shortcutArea = Self.loadShortcut(from: defaults, forKey: Keys.shortcutArea, default: .defaultArea)
         shortcutWindow = Self.loadShortcut(from: defaults, forKey: Keys.shortcutWindow, default: .defaultWindow)
+        shortcutScrollingCapture = Self.loadShortcut(from: defaults, forKey: Keys.shortcutScrollingCapture, default: .defaultScrollingCapture)
 
         // Load overlay position (default to bottom-left)
         if let positionString = defaults.string(forKey: Keys.overlayPosition),

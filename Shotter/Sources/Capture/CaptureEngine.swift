@@ -444,6 +444,36 @@ class CaptureEngine {
         return await captureWindow(window)
     }
 
+    /// Show window picker and perform scrolling capture of the selected window
+    func captureScrollingWindow() async -> CaptureResult? {
+        guard let window = await showWindowSelector() else {
+            return nil
+        }
+
+        // Use the center of the window frame as the click point.
+        // SCWindow frames are already in ScreenCaptureKit coordinates (top-left origin).
+        let clickPoint = CGPoint(x: window.frame.midX, y: window.frame.midY)
+        let selection = WindowSelectionResult(window: window, clickPoint: clickPoint)
+
+        let session = ScrollingCaptureSession(selection: selection) { [weak self] scWindow in
+            guard let result = await self?.captureWindow(scWindow) else { return nil }
+            return result.image
+        }
+
+        guard let image = await session.capture() else {
+            logger.warning("Scrolling capture returned nil")
+            return nil
+        }
+
+        // Determine the preferred screen from the window's center
+        let windowCenter = CGPoint(x: window.frame.midX, y: window.frame.midY)
+        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
+        let cocoaCenter = NSPoint(x: windowCenter.x, y: mainScreenHeight - windowCenter.y)
+        let containingScreen = NSScreen.screens.first { $0.frame.contains(cocoaCenter) }
+
+        return CaptureResult(image: image, preferredScreen: containingScreen)
+    }
+
     // MARK: - Selectors
 
     @MainActor

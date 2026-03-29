@@ -51,6 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onCaptureFullscreen: { [weak self] in self?.captureFullscreen() },
             onCaptureArea: { [weak self] in self?.captureArea() },
             onCaptureWindow: { [weak self] in self?.captureWindow() },
+            onCaptureScrollingWindow: { [weak self] in self?.captureScrollingWindow() },
             onCaptureDisplay: { [weak self] display in self?.captureDisplay(display) },
             onOpenSaveFolder: { self.openSaveFolder() },
             onOpenPreferences: { self.openPreferences() },
@@ -64,6 +65,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onFullscreen: { [weak self] directCopy in self?.captureFullscreen(directCopy: directCopy) },
             onArea: { [weak self] directCopy in self?.captureArea(directCopy: directCopy) },
             onWindow: { [weak self] directCopy in self?.captureWindow(directCopy: directCopy) },
+            onScrollingCapture: { [weak self] directCopy in self?.captureScrollingWindow(directCopy: directCopy) },
             onPotentialCapture: { [weak self] in self?.captureEngine?.preCaptureScreens() }
         )
 
@@ -118,6 +120,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let result = await captureEngine?.captureWindowInteractive() else {
                 // User cancelled or capture failed
                 logger.info("Window capture returned nil (user cancelled or failed)")
+                return
+            }
+            handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
+        }
+    }
+
+    private func captureScrollingWindow(directCopy: Bool = false) {
+        Task {
+            guard let result = await captureEngine?.captureScrollingWindow() else {
+                // User cancelled or capture failed
+                logger.info("Scrolling window capture returned nil (user cancelled or failed)")
                 return
             }
             handleCapture(result.image, preferredScreen: result.preferredScreen, directCopy: directCopy)
