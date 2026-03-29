@@ -92,6 +92,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DebugLogger.log("Application will terminate")
     }
 
+    // MARK: - URL Scheme Handling
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            handleShotterURL(url)
+        }
+    }
+
+    private func handleShotterURL(_ url: URL) {
+        guard url.scheme == "shotter" else { return }
+
+        let host = url.host
+        let params = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
+
+        switch host {
+        case "capture":
+            let mode = params?.first(where: { $0.name == "mode" })?.value ?? "fullscreen"
+            DebugLogger.log("URL scheme capture request: mode=\(mode)")
+            switch mode {
+            case "fullscreen":
+                captureFullscreen()
+            case "area":
+                captureArea()
+            case "window":
+                captureWindow()
+            default:
+                logger.warning("Unknown capture mode from URL scheme: \(mode)")
+            }
+        default:
+            logger.warning("Unknown URL scheme command: \(host ?? "nil")")
+        }
+    }
+
     private func captureFullscreen(directCopy: Bool = false) {
         Task {
             guard let result = await captureEngine?.captureFullscreen() else {

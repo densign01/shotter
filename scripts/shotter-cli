@@ -1,0 +1,76 @@
+#!/bin/bash
+# shotter-cli - CLI interface for Shotter screenshot app
+# Communicates with the running Shotter app via URL scheme.
+#
+# Usage:
+#   shotter-cli capture --fullscreen
+#   shotter-cli capture --area
+#   shotter-cli capture --window
+
+set -euo pipefail
+
+readonly PROG="$(basename "$0")"
+
+usage() {
+    cat <<USAGE
+Shotter CLI - Screenshot automation for macOS
+
+Usage:
+  $PROG capture [-f|--fullscreen] [-a|--area] [-w|--window]
+  $PROG help
+
+Commands:
+  capture   Trigger a screenshot capture via the running Shotter app
+
+Capture options:
+  -f, --fullscreen   Capture the entire screen (default)
+  -a, --area         Interactive area selection
+  -w, --window       Interactive window selection
+
+Examples:
+  $PROG capture --fullscreen
+  $PROG capture -a
+  $PROG capture --window
+
+Note: Shotter must be running for commands to work. The CLI communicates
+with the app via the shotter:// URL scheme.
+USAGE
+}
+
+cmd_capture() {
+    local mode="fullscreen"
+
+    case "${1:-}" in
+        -f|--fullscreen) mode="fullscreen" ;;
+        -a|--area)       mode="area" ;;
+        -w|--window)     mode="window" ;;
+        "")              mode="fullscreen" ;;
+        *)
+            echo "Error: Unknown capture option '$1'" >&2
+            echo "Run '$PROG capture --help' or '$PROG help' for usage." >&2
+            exit 1
+            ;;
+    esac
+
+    open "shotter://capture?mode=${mode}"
+}
+
+case "${1:-}" in
+    capture)
+        shift
+        cmd_capture "${1:-}"
+        ;;
+    help|--help|-h)
+        usage
+        ;;
+    "")
+        echo "Usage: $PROG <command> [options]"
+        echo "Run '$PROG help' for more information."
+        exit 1
+        ;;
+    *)
+        echo "Error: Unknown command '$1'" >&2
+        echo "Run '$PROG help' for more information." >&2
+        exit 1
+        ;;
+esac
