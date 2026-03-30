@@ -18,6 +18,39 @@ class AnnotationEditorState: ObservableObject {
     @Published var cropRect: CGRect? = nil
     @Published private(set) var canvasFocusRequestID: Int = 0
 
+    // MARK: - Zoom
+
+    @Published var zoomLevel: CGFloat = 1.0  // 1.0 = fit to view
+    @Published var panOffset: CGPoint = .zero
+
+    static let zoomPresets: [CGFloat] = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]
+    static let minZoom: CGFloat = 0.25
+    static let maxZoom: CGFloat = 4.0
+
+    /// Zoom display string for the UI
+    var zoomDisplayString: String {
+        "\(Int(zoomLevel * 100))%"
+    }
+
+    func zoomIn() {
+        let next = Self.zoomPresets.first(where: { $0 > zoomLevel + 0.01 }) ?? Self.maxZoom
+        zoomLevel = min(next, Self.maxZoom)
+    }
+
+    func zoomOut() {
+        let prev = Self.zoomPresets.last(where: { $0 < zoomLevel - 0.01 }) ?? Self.minZoom
+        zoomLevel = max(prev, Self.minZoom)
+    }
+
+    func zoomToFit() {
+        zoomLevel = 1.0
+        panOffset = .zero
+    }
+
+    func setZoom(_ level: CGFloat) {
+        zoomLevel = max(Self.minZoom, min(level, Self.maxZoom))
+    }
+
     // Modifier keys
     var isShiftKeyHeld: Bool = false
     
@@ -431,8 +464,20 @@ extension AnnotationEditorState {
                     selectAnnotation(first.id)
                 }
                 return true
+            case "0":
+                zoomToFit()
+                return true
             default:
                 break
+            }
+
+            // Cmd+ and Cmd- for zoom (check keyCode for = and -)
+            if event.keyCode == 24 { // "=" / "+" key
+                zoomIn()
+                return true
+            } else if event.keyCode == 27 { // "-" key
+                zoomOut()
+                return true
             }
         } else {
             // Tool shortcuts

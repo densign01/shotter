@@ -349,7 +349,7 @@ struct AnnotationEditorView: View {
                         if state.editingTextAnnotationId != nil {
                             TextEditorOverlay(
                                 state: state,
-                                imageRect: annotationImageRect(in: geometry.size, imageSize: state.imageSize),
+                                imageRect: zoomedImageRect(in: geometry.size),
                                 scale: calculateScale(for: geometry.size)
                             )
                         }
@@ -359,22 +359,36 @@ struct AnnotationEditorView: View {
                 // Bottom bar with tool options (always visible for consistent layout)
                 Divider()
                 ToolOptionsBar(state: state)
+                ZoomBar(state: state)
                 DragMeBar(state: state)
             }
             .background(Color(NSColor.controlBackgroundColor))
         }
     }
     
+    private func zoomedImageRect(in viewSize: CGSize) -> CGRect {
+        let fitRect = annotationImageRect(in: viewSize, imageSize: state.imageSize)
+        let baseScale = fitRect.width / state.imageSize.width
+        let zoomedScale = baseScale * state.zoomLevel
+        let zoomedWidth = state.imageSize.width * zoomedScale
+        let zoomedHeight = state.imageSize.height * zoomedScale
+        let originX = (viewSize.width - zoomedWidth) / 2 + state.panOffset.x
+        let originY = (viewSize.height - zoomedHeight) / 2 + state.panOffset.y
+        return CGRect(x: originX, y: originY, width: zoomedWidth, height: zoomedHeight)
+    }
+
     private func calculateScale(for viewSize: CGSize) -> CGFloat {
         let imageSize = state.imageSize
         let imageAspect = imageSize.width / imageSize.height
         let viewAspect = viewSize.width / viewSize.height
-        
+
+        let baseScale: CGFloat
         if imageAspect > viewAspect {
-            return viewSize.width / imageSize.width
+            baseScale = viewSize.width / imageSize.width
         } else {
-            return viewSize.height / imageSize.height
+            baseScale = viewSize.height / imageSize.height
         }
+        return baseScale * state.zoomLevel
     }
 }
 
@@ -725,6 +739,63 @@ struct ToolOptionsBar: View {
         case .textHighlight:
             return "Drag to highlight"
         }
+    }
+}
+
+// MARK: - Zoom Bar
+
+struct ZoomBar: View {
+    @ObservedObject var state: AnnotationEditorState
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Spacer()
+
+            Button(action: { state.zoomOut() }) {
+                Image(systemName: "minus.magnifyingglass")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .disabled(state.zoomLevel <= AnnotationEditorState.minZoom + 0.01)
+            .help("Zoom Out (\u{2318}-)")
+
+            Picker("", selection: Binding(
+                get: { closestZoomPreset(state.zoomLevel) },
+                set: { state.setZoom($0) }
+            )) {
+                ForEach(AnnotationEditorState.zoomPresets, id: \.self) { preset in
+                    Text("\(Int(preset * 100))%").tag(preset)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 80)
+            .help("Zoom Level")
+
+            Button(action: { state.zoomIn() }) {
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .disabled(state.zoomLevel >= AnnotationEditorState.maxZoom - 0.01)
+            .help("Zoom In (\u{2318}+)")
+
+            Button(action: { state.zoomToFit() }) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 11))
+            }
+            .buttonStyle(.plain)
+            .help("Fit to View (\u{2318}0)")
+
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .frame(height: 28)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    private func closestZoomPreset(_ value: CGFloat) -> CGFloat {
+        AnnotationEditorState.zoomPresets.min(by: { abs($0 - value) < abs($1 - value) }) ?? 1.0
     }
 }
 

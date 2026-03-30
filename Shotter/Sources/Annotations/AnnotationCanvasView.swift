@@ -38,9 +38,14 @@ class AnnotationCanvasView: NSView {
     // Cached CIContext for blur operations (expensive to create)
     private let ciContext = CIContext()
 
-    // Scale and offset for zooming/panning (future feature)
+    // Scale and offset for zooming/panning
     var scale: CGFloat = 1.0
     var offset: CGPoint = .zero
+
+    // Pan tracking
+    private var isPanning = false
+    private var panStartPoint: NSPoint = .zero
+    private var panStartOffset: CGPoint = .zero
     
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { false }  // Use standard macOS coordinates
@@ -161,9 +166,22 @@ class AnnotationCanvasView: NSView {
     private func imageRectInView() -> CGRect {
         guard let state = state else { return .zero }
 
-        let imageRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
-        scale = imageRect.width / state.imageSize.width
-        return imageRect
+        // Base fit-to-view rect
+        let fitRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
+        let baseScale = fitRect.width / state.imageSize.width
+
+        // Apply zoom level from state
+        let zoomedScale = baseScale * state.zoomLevel
+        scale = zoomedScale
+
+        let zoomedWidth = state.imageSize.width * zoomedScale
+        let zoomedHeight = state.imageSize.height * zoomedScale
+
+        // Center in view, then offset by pan
+        let originX = (bounds.width - zoomedWidth) / 2 + state.panOffset.x
+        let originY = (bounds.height - zoomedHeight) / 2 + state.panOffset.y
+
+        return CGRect(x: originX, y: originY, width: zoomedWidth, height: zoomedHeight)
     }
     
     private func drawCheckerboard(in rect: CGRect, context: CGContext) {
@@ -359,8 +377,39 @@ class AnnotationCanvasView: NSView {
         NSCursor.arrow.set()
     }
     
+    // MARK: - Scroll Wheel (Zoom)
+
+    override func scrollWheel(with event: NSEvent) {
+        guard let state = state else {
+            super.scrollWheel(with: event)
+            return
+        }
+
+        // Pinch-to-zoom (trackpad) or Cmd+scroll
+        if event.modifierFlags.contains(.command) || event.phase != [] || event.momentumPhase != [] {
+            let delta = event.scrollingDeltaY
+            if abs(delta) > 0.1 {
+                let factor: CGFloat = 1.0 + delta * 0.01
+                let newZoom = state.zoomLevel * factor
+                state.setZoom(newZoom)
+                needsDisplay = true
+            }
+            return
+        }
+
+        // Regular scroll: pan when zoomed in
+        if state.zoomLevel > 1.0 + 0.01 {
+            state.panOffset.x += event.scrollingDeltaX
+            state.panOffset.y -= event.scrollingDeltaY
+            needsDisplay = true
+            return
+        }
+
+        super.scrollWheel(with: event)
+    }
+
     // MARK: - Keyboard Events
-    
+
     override func keyDown(with event: NSEvent) {
         guard let state = state else {
             super.keyDown(with: event)
