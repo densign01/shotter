@@ -444,6 +444,57 @@ class CaptureEngine {
         return await captureWindow(window)
     }
 
+    // MARK: - Scrolling Capture
+
+    /// Show window selector, then perform a scrolling capture of the selected window
+    func captureScrollingInteractive() async -> CaptureResult? {
+        await refreshAvailableContent()
+        let windows = await getAvailableWindows()
+
+        guard let selection = await showWindowSelectorForScrolling(windows: windows) else {
+            return nil
+        }
+
+        let session = ScrollingCaptureSession(
+            selection: selection,
+            captureWindow: { [weak self] window in
+                guard let result = await self?.captureWindow(window) else { return nil }
+                return result.image
+            }
+        )
+
+        guard let image = await session.capture() else {
+            logger.error("Scrolling capture failed")
+            return nil
+        }
+
+        // Determine which screen the window is on
+        let windowCenter = CGPoint(x: selection.window.frame.midX, y: selection.window.frame.midY)
+        let mainScreenHeight = NSScreen.screens.first?.frame.height ?? 0
+        let cocoaCenter = NSPoint(x: windowCenter.x, y: mainScreenHeight - windowCenter.y)
+        let containingScreen = NSScreen.screens.first { $0.frame.contains(cocoaCenter) }
+
+        return CaptureResult(image: image, preferredScreen: containingScreen)
+    }
+
+    @MainActor
+    private func showWindowSelectorForScrolling(windows: [SCWindow]) async -> WindowSelectionResult? {
+        return await withCheckedContinuation { continuation in
+            let selector = WindowSelectorController(windows: windows) { [weak self] window in
+                self?.activeWindowSelector = nil
+                guard let window = window else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                // Use the center of the window as the click point for scroll targeting
+                let clickPoint = CGPoint(x: window.frame.midX, y: window.frame.midY)
+                continuation.resume(returning: WindowSelectionResult(window: window, clickPoint: clickPoint))
+            }
+            self.activeWindowSelector = selector
+            selector.show()
+        }
+    }
+
     // MARK: - Selectors
 
     @MainActor
