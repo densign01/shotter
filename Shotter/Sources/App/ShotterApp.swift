@@ -145,7 +145,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             SoundManager.shared.playCaptureSound()
         }
 
-        // Only save immediately if auto-save is enabled
+        // When smart file naming is enabled and auto-save is on, use async path
+        if prefs.autoSaveScreenshots && prefs.smartFileNaming {
+            // Copy immediately (don't wait for OCR)
+            if prefs.autoCopyToClipboard || shouldDirectCopy {
+                copyToClipboard(image, fileURL: nil)
+            }
+            if shouldDirectCopy {
+                logger.info("Direct-copy mode: copied to clipboard, skipping overlay")
+                return
+            }
+
+            Task {
+                let result = await saveImageAsync(image)
+                await MainActor.run {
+                    switch result {
+                    case .success(let savedURL):
+                        self.overlayController?.showOverlay(
+                            image: image,
+                            savedURL: savedURL,
+                            preferredScreen: preferredScreen,
+                            onCopy: {
+                                self.copyToClipboard(image, fileURL: savedURL)
+                            },
+                            onSave: {
+                                NSWorkspace.shared.activateFileViewerSelecting([savedURL])
+                            },
+                            onAnnotate: {
+                                DebugLogger.log("Overlay annotate clicked (savedURL available)")
+                                self.overlayController?.dismissOverlay()
+                                self.openAnnotationEditor(image: image, savedURL: savedURL, preferredScreen: preferredScreen)
+                            },
+                            onDelete: {
+                                self.moveToTrash(savedURL)
+                            }
+                        )
+                    case .failure(let error):
+                        self.showSaveErrorAlert(error: error)
+                        self.showOverlayWithManualSave(image: image, preferredScreen: preferredScreen)
+                    }
+                }
+            }
+            return
+        }
+
+        // Synchronous path (no smart naming or no auto-save)
         let result: Result<URL, SaveError>?
         let savedURL: URL?
         if prefs.autoSaveScreenshots {
@@ -258,9 +302,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    /// Async save that uses smart file naming when enabled.
+    private func saveImageAsync(_ image: NSImage) async -> Result<URL, SaveError> {
+        let prefs = PreferencesManager.shared
+        let filename: String
+        if prefs.smartFileNaming {
+            filename = await SmartFileNaming.generateFilename(for: image)
+        } else {
+            filename = FileNaming.generateFilename()
+        }
+        return saveImageWithFilename(image, filename: filename)
+    }
+
     private func saveImage(_ image: NSImage) -> Result<URL, SaveError> {
-        let saveFolder = PreferencesManager.shared.saveLocation
         let filename = FileNaming.generateFilename()
+        return saveImageWithFilename(image, filename: filename)
+    }
+
+    private func saveImageWithFilename(_ image: NSImage, filename: String) -> Result<URL, SaveError> {
+        let saveFolder = PreferencesManager.shared.saveLocation
         let fileURL = saveFolder.appendingPathComponent(filename)
         
         // Ensure directory exists

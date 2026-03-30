@@ -91,21 +91,34 @@ class AnnotationEditorWindow: NSWindow {
     private func saveImage() {
         DebugLogger.log("Save requested")
         guard let finalImage = state.renderFinalImage() else { return }
-        
+
         if let url = savedURL {
             // Overwrite existing file
             saveToDisk(image: finalImage, url: url)
         } else {
-            // Show save panel
-            let savePanel = NSSavePanel()
-            savePanel.allowedContentTypes = [.png]
-            savePanel.nameFieldStringValue = FileNaming.generateFilename()
-            savePanel.directoryURL = PreferencesManager.shared.saveLocation
-            
-            savePanel.beginSheetModal(for: self) { [weak self] response in
-                if response == .OK, let url = savePanel.url {
-                    self?.saveToDisk(image: finalImage, url: url)
+            // Generate filename (smart or basic) then show save panel
+            if PreferencesManager.shared.smartFileNaming {
+                Task {
+                    let filename = await SmartFileNaming.generateFilename(for: finalImage)
+                    await MainActor.run {
+                        self.showSavePanel(for: finalImage, defaultFilename: filename)
+                    }
                 }
+            } else {
+                showSavePanel(for: finalImage, defaultFilename: FileNaming.generateFilename())
+            }
+        }
+    }
+
+    private func showSavePanel(for image: NSImage, defaultFilename: String) {
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.png]
+        savePanel.nameFieldStringValue = defaultFilename
+        savePanel.directoryURL = PreferencesManager.shared.saveLocation
+
+        savePanel.beginSheetModal(for: self) { [weak self] response in
+            if response == .OK, let url = savePanel.url {
+                self?.saveToDisk(image: image, url: url)
             }
         }
     }

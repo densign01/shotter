@@ -96,6 +96,7 @@ class PreferencesManager: ObservableObject {
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
         static let overlayPosition = "overlayPosition"
+        static let smartFileNaming = "smartFileNaming"
     }
     
     @Published var saveLocation: URL {
@@ -164,6 +165,13 @@ class PreferencesManager: ObservableObject {
     @Published var overlayPosition: OverlayPosition {
         didSet {
             defaults.set(overlayPosition.rawValue, forKey: Keys.overlayPosition)
+        }
+    }
+
+    /// When enabled, screenshots are named using OCR-derived descriptions instead of just timestamps.
+    @Published var smartFileNaming: Bool {
+        didSet {
+            defaults.set(smartFileNaming, forKey: Keys.smartFileNaming)
         }
     }
 
@@ -236,6 +244,9 @@ class PreferencesManager: ObservableObject {
         } else {
             overlayPosition = .bottomLeft
         }
+
+        // Load smart file naming preference (default to off)
+        smartFileNaming = defaults.bool(forKey: Keys.smartFileNaming)
 
         defaults.set(actualLaunchAtLogin, forKey: Keys.launchAtLogin)
     }
