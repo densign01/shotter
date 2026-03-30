@@ -65,6 +65,25 @@ struct PreferencesView: View {
             } header: {
                 Text("General")
             }
+
+            Section {
+                Toggle("Stamp screenshots with timestamp & app name", isOn: $prefs.timestampOverlayEnabled)
+
+                if prefs.timestampOverlayEnabled {
+                    HStack {
+                        Text("Badge position:")
+                        Spacer()
+                        Picker("", selection: $prefs.timestampOverlayPosition) {
+                            ForEach(TimestampOverlayPosition.allCases, id: \.self) { position in
+                                Text(position.displayName).tag(position)
+                            }
+                        }
+                        .frame(width: 130)
+                    }
+                }
+            } header: {
+                Text("Timestamp Overlay")
+            }
             
             Section {
                 ShortcutRow(

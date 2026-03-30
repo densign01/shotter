@@ -96,6 +96,8 @@ class PreferencesManager: ObservableObject {
         static let shortcutArea = "shortcutArea"
         static let shortcutWindow = "shortcutWindow"
         static let overlayPosition = "overlayPosition"
+        static let timestampOverlayEnabled = "timestampOverlayEnabled"
+        static let timestampOverlayPosition = "timestampOverlayPosition"
     }
     
     @Published var saveLocation: URL {
@@ -167,6 +169,20 @@ class PreferencesManager: ObservableObject {
         }
     }
 
+    /// When enabled, screenshots are stamped with a timestamp and active app name.
+    @Published var timestampOverlayEnabled: Bool {
+        didSet {
+            defaults.set(timestampOverlayEnabled, forKey: Keys.timestampOverlayEnabled)
+        }
+    }
+
+    /// Corner position for the timestamp overlay badge.
+    @Published var timestampOverlayPosition: TimestampOverlayPosition {
+        didSet {
+            defaults.set(timestampOverlayPosition.rawValue, forKey: Keys.timestampOverlayPosition)
+        }
+    }
+
     private func saveShortcut(_ config: ShortcutConfig, forKey key: String) {
         if let data = try? JSONEncoder().encode(config) {
             defaults.set(data, forKey: key)
@@ -235,6 +251,16 @@ class PreferencesManager: ObservableObject {
             overlayPosition = position
         } else {
             overlayPosition = .bottomLeft
+        }
+
+        // Load timestamp overlay preference (default to off)
+        timestampOverlayEnabled = defaults.bool(forKey: Keys.timestampOverlayEnabled)
+
+        if let tsPositionString = defaults.string(forKey: Keys.timestampOverlayPosition),
+           let tsPosition = TimestampOverlayPosition(rawValue: tsPositionString) {
+            timestampOverlayPosition = tsPosition
+        } else {
+            timestampOverlayPosition = .bottomLeft
         }
 
         defaults.set(actualLaunchAtLogin, forKey: Keys.launchAtLogin)
