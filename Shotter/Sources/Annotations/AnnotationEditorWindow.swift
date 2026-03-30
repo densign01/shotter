@@ -336,15 +336,15 @@ struct AnnotationEditorView: View {
             VStack(spacing: 0) {
                 // Toolbar
                 AnnotationToolbar(state: state, onSave: onSave, onCopy: onCopy, onCancel: onCancel)
-                
+
                 Divider()
-                
+
                 // Canvas
                 GeometryReader { geometry in
                     ZStack {
                         AnnotationCanvasRepresentable(state: state)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        
+
                         // Text editor overlay
                         if state.editingTextAnnotationId != nil {
                             TextEditorOverlay(
@@ -355,13 +355,32 @@ struct AnnotationEditorView: View {
                         }
                     }
                 }
-                
+
                 // Bottom bar with tool options (always visible for consistent layout)
                 Divider()
                 ToolOptionsBar(state: state)
                 DragMeBar(state: state)
             }
             .background(Color(NSColor.controlBackgroundColor))
+
+            // Auto-redact review panel
+            if !state.detectedSensitiveRegions.isEmpty {
+                RedactionReviewOverlay(state: state)
+            }
+
+            // Loading indicator for sensitive data detection
+            if state.isDetectingSensitiveData {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Scanning for sensitive data...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(24)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
     }
     
@@ -407,6 +426,14 @@ struct AnnotationToolbar: View {
             
             Spacer()
             
+            // Auto-Redact
+            HoverIconButton(
+                icon: "eye.slash",
+                tooltip: "Auto-Redact Sensitive Data",
+                action: { state.detectSensitiveData() }
+            )
+            .disabled(state.isDetectingSensitiveData)
+
             // Undo/Redo
             HStack(spacing: 4) {
                 HoverIconButton(icon: "arrow.uturn.backward", tooltip: "Undo (⌘Z)", action: { state.undo() })
@@ -760,6 +787,104 @@ struct DragMeBar: View {
             }
             return provider
         }
+    }
+}
+
+// MARK: - Redaction Review Overlay
+
+struct RedactionReviewOverlay: View {
+    @ObservedObject var state: AnnotationEditorState
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(spacing: 12) {
+                HStack {
+                    Image(systemName: "eye.slash")
+                        .foregroundColor(.orange)
+                    Text("Sensitive Data Detected")
+                        .font(.headline)
+                    Spacer()
+                    Button(action: { state.dismissRedactionResults() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if state.detectedSensitiveRegions.isEmpty {
+                    Text("No sensitive data found.")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(Array(state.detectedSensitiveRegions.enumerated()), id: \.element.id) { index, region in
+                                HStack(spacing: 8) {
+                                    Toggle("", isOn: Binding(
+                                        get: { state.detectedSensitiveRegions[index].isSelected },
+                                        set: { state.detectedSensitiveRegions[index].isSelected = $0 }
+                                    ))
+                                    .toggleStyle(.checkbox)
+                                    .labelsHidden()
+
+                                    Image(systemName: region.category.icon)
+                                        .foregroundColor(.orange)
+                                        .frame(width: 16)
+
+                                    Text(region.category.rawValue)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .frame(width: 70, alignment: .leading)
+
+                                    Text(maskedText(region.text))
+                                        .font(.system(.caption, design: .monospaced))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+
+                                    Spacer()
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 150)
+
+                    HStack {
+                        let selectedCount = state.detectedSensitiveRegions.filter(\.isSelected).count
+                        Text("\(selectedCount) of \(state.detectedSensitiveRegions.count) selected")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Button("Cancel") {
+                            state.dismissRedactionResults()
+                        }
+
+                        Button("Redact Selected") {
+                            state.applyRedactions()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(state.detectedSensitiveRegions.filter(\.isSelected).isEmpty)
+                    }
+                }
+            }
+            .padding(16)
+            .background(.ultraThickMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(radius: 8)
+            .padding(.horizontal, 40)
+            .padding(.bottom, 80)
+        }
+    }
+
+    private func maskedText(_ text: String) -> String {
+        if text.count <= 6 { return String(repeating: "*", count: text.count) }
+        let prefix = String(text.prefix(3))
+        let suffix = String(text.suffix(3))
+        let middle = String(repeating: "*", count: min(text.count - 6, 10))
+        return "\(prefix)\(middle)\(suffix)"
     }
 }
 

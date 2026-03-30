@@ -335,6 +335,46 @@ class AnnotationEditorState: ObservableObject {
         setTool(.select)
     }
 
+    // MARK: - Auto-Redact
+
+    @Published var detectedSensitiveRegions: [SensitiveTextRegion] = []
+    @Published var isDetectingSensitiveData: Bool = false
+
+    func detectSensitiveData() {
+        isDetectingSensitiveData = true
+        Task {
+            let regions = await SensitiveDataDetector.detect(in: baseImage)
+            await MainActor.run {
+                self.detectedSensitiveRegions = regions
+                self.isDetectingSensitiveData = false
+            }
+        }
+    }
+
+    func applyRedactions() {
+        let selectedRegions = detectedSensitiveRegions.filter(\.isSelected)
+        guard !selectedRegions.isEmpty else {
+            detectedSensitiveRegions = []
+            return
+        }
+
+        saveUndoState()
+
+        for region in selectedRegions {
+            let blurAnnotation = BlurAnnotation(
+                bounds: region.bounds,
+                blurRadius: 20
+            )
+            annotations.append(AnyAnnotation(blurAnnotation))
+        }
+
+        detectedSensitiveRegions = []
+    }
+
+    func dismissRedactionResults() {
+        detectedSensitiveRegions = []
+    }
+
     // MARK: - Rendering
     
     /// Render the final image with all annotations
