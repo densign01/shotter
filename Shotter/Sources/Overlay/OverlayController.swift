@@ -11,6 +11,20 @@ private enum OverlayLayout {
     static let actionBarOuterPadding: CGFloat = 8
 }
 
+private enum DragExportError: LocalizedError {
+    case sourceUnavailable
+    case imageConversionFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .sourceUnavailable:
+            return "The screenshot was no longer available for dragging."
+        case .imageConversionFailed:
+            return "Could not convert the screenshot to PNG for dragging."
+        }
+    }
+}
+
 class OverlayController {
     private var overlayWindow: OverlayWindow?
     private var dismissTimer: Timer?
@@ -340,7 +354,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
     ) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else {
-                completionHandler(nil)
+                completionHandler(DragExportError.sourceUnavailable)
                 return
             }
             do {
@@ -367,7 +381,7 @@ class OverlayWindow: NSPanel, NSDraggingSource, NSFilePromiseProviderDelegate {
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            return
+            throw DragExportError.imageConversionFailed
         }
         try pngData.write(to: destinationURL, options: .atomic)
     }

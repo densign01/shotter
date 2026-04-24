@@ -12,7 +12,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DIST_DIR="$PROJECT_DIR/dist"
+DIST_DIR="${SHOTTER_DIST_DIR:-$PROJECT_DIR/dist}"
 APP_BUNDLE="$DIST_DIR/Shotter.app"
 ZIP_FILE="$DIST_DIR/Shotter-notarize.zip"
 KEYCHAIN_PROFILE="notarytool"

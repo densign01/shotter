@@ -298,7 +298,12 @@ class AreaSelectionCoordinator {
     }
     
     func handleClick(at globalPoint: NSPoint) {
-        if mode == .window, let window = highlightedWindow {
+        guard mode == .window else { return }
+        let window = highlightedWindow ?? findWindowAt(globalPoint)
+        highlightedWindow = window
+        updateAllViews()
+
+        if let window {
             onWindowSelected?(window)
         }
     }

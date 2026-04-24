@@ -115,7 +115,7 @@ class HotkeyManager {
         
         // We need to use a callback that can capture self
         let callback: CGEventTapCallBack = { proxy, type, event, refcon in
-            guard let refcon = refcon else { return Unmanaged.passRetained(event) }
+            guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
             let manager = Unmanaged<HotkeyManager>.fromOpaque(refcon).takeUnretainedValue()
             return manager.handleEvent(proxy: proxy, type: type, event: event)
         }
@@ -151,7 +151,7 @@ class HotkeyManager {
             if let tap = eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         if type == .flagsChanged {
@@ -171,11 +171,11 @@ class HotkeyManager {
                     }
                 }
             }
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
 
         guard type == .keyDown else {
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
         
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
@@ -202,7 +202,7 @@ class HotkeyManager {
         if fullscreenShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: fullscreenShortcut, allowExtraOption: true) {
             guard Permissions.checkScreenRecordingSync(forceRefresh: true) else {
                 logger.info("Screen recording unavailable - allowing native fullscreen shortcut")
-                return Unmanaged.passRetained(event)
+                return Unmanaged.passUnretained(event)
             }
 
             let directCopyRequested = directCopyRequested(flags: flags, shortcut: fullscreenShortcut)
@@ -216,7 +216,7 @@ class HotkeyManager {
         if areaShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: areaShortcut, allowExtraOption: true) {
             guard Permissions.checkScreenRecordingSync(forceRefresh: true) else {
                 logger.info("Screen recording unavailable - allowing native area shortcut")
-                return Unmanaged.passRetained(event)
+                return Unmanaged.passUnretained(event)
             }
 
             let directCopyRequested = directCopyRequested(flags: flags, shortcut: areaShortcut)
@@ -230,7 +230,7 @@ class HotkeyManager {
         if windowShortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: windowShortcut, allowExtraOption: true) {
             guard Permissions.checkScreenRecordingSync(forceRefresh: true) else {
                 logger.info("Screen recording unavailable - allowing native window shortcut")
-                return Unmanaged.passRetained(event)
+                return Unmanaged.passUnretained(event)
             }
 
             let directCopyRequested = directCopyRequested(flags: flags, shortcut: windowShortcut)
@@ -240,7 +240,7 @@ class HotkeyManager {
             return nil // Consume the event
         }
         
-        return Unmanaged.passRetained(event)
+        return Unmanaged.passUnretained(event)
     }
     
     private func matchesShortcut(keyCode: Int, flags: CGEventFlags, shortcut: ShortcutConfig, allowExtraOption: Bool = false) -> Bool {

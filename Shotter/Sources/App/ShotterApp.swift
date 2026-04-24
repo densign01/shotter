@@ -164,10 +164,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Direct-copy mode: skip overlay entirely
+        // Direct-copy mode skips the overlay unless auto-save failed and the user needs a retry path.
         if shouldDirectCopy {
-            logger.info("Direct-copy mode: copied to clipboard, skipping overlay")
-            return
+            if case .some(.failure) = result {
+                logger.info("Direct-copy mode: copied to clipboard, showing retry overlay because auto-save failed")
+            } else {
+                logger.info("Direct-copy mode: copied to clipboard, skipping overlay")
+                return
+            }
         }
 
         // Show overlay

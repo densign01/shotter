@@ -13,7 +13,8 @@ fi
 VERSION="$1"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DMG_PATH="$PROJECT_DIR/dist/Shotter-$VERSION.dmg"
+DIST_DIR="${SHOTTER_DIST_DIR:-$PROJECT_DIR/dist}"
+DMG_PATH="$DIST_DIR/Shotter-$VERSION.dmg"
 APPCAST_PATH="$PROJECT_DIR/docs/appcast.xml"
 SPARKLE_BIN="$PROJECT_DIR/.build/artifacts/sparkle/Sparkle/bin"
 

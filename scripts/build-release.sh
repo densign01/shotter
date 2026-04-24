@@ -7,7 +7,7 @@ set -e
 VERSION="${1:-1.0.0}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DIST_DIR="$PROJECT_DIR/dist"
+DIST_DIR="${SHOTTER_DIST_DIR:-$PROJECT_DIR/dist}"
 APP_BUNDLE="$DIST_DIR/Shotter.app"
 SIGNING_IDENTITY="Developer ID Application: Daniel Ensign (PTP9R9BR3L)"
 ENTITLEMENTS="$PROJECT_DIR/Shotter/Resources/Shotter.entitlements"
@@ -30,11 +30,11 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 mkdir -p "$APP_BUNDLE/Contents/Frameworks"
 
 # Copy binary
-cp ".build/release/Shotter" "$APP_BUNDLE/Contents/MacOS/"
+ditto --noextattr --noqtn ".build/release/Shotter" "$APP_BUNDLE/Contents/MacOS/Shotter"
 
 # Copy Sparkle framework for auto-updates
 echo "Embedding Sparkle framework..."
-cp -R ".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" "$APP_BUNDLE/Contents/Frameworks/"
+ditto --noextattr --noqtn ".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
 
 # Add rpath so binary can find the framework
 install_name_tool -add_rpath @executable_path/../Frameworks "$APP_BUNDLE/Contents/MacOS/Shotter"
@@ -84,12 +84,15 @@ EOF
 # Copy any resources if they exist
 if [ -d "$PROJECT_DIR/Shotter/Resources" ]; then
     # Copy resources except Info.plist and entitlements (we generate Info.plist)
-    find "$PROJECT_DIR/Shotter/Resources" -type f ! -name "Info.plist" ! -name "*.entitlements" -exec cp {} "$APP_BUNDLE/Contents/Resources/" \; 2>/dev/null || true
+    find "$PROJECT_DIR/Shotter/Resources" -type f ! -name "Info.plist" ! -name "*.entitlements" -exec ditto --noextattr --noqtn {} "$APP_BUNDLE/Contents/Resources/" \; 2>/dev/null || true
 fi
 
 # Strip extended attributes (provenance, resource forks) that break codesign
 echo "Stripping extended attributes..."
+find "$APP_BUNDLE" \( -name ".DS_Store" -o -name "._*" \) -delete
 xattr -cr "$APP_BUNDLE"
+find "$APP_BUNDLE" -exec xattr -d com.apple.FinderInfo {} \; 2>/dev/null || true
+find "$APP_BUNDLE" -exec xattr -d "com.apple.fileprovider.fpfs#P" {} \; 2>/dev/null || true
 
 # Sign with hardened runtime
 echo "Signing with hardened runtime..."

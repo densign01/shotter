@@ -7,7 +7,7 @@ set -e
 VERSION="${1:-1.0.0}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DIST_DIR="$PROJECT_DIR/dist"
+DIST_DIR="${SHOTTER_DIST_DIR:-$PROJECT_DIR/dist}"
 APP_BUNDLE="$DIST_DIR/Shotter.app"
 DMG_NAME="Shotter-$VERSION.dmg"
 DMG_PATH="$DIST_DIR/$DMG_NAME"
