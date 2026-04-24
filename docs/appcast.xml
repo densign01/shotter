@@ -6,6 +6,28 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.7.3</title>
+      <pubDate>Fri, 24 Apr 2026 09:20:07 -0400</pubDate>
+      <sparkle:version>173</sparkle:version>
+      <sparkle:shortVersionString>1.7.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's Fixed in 1.7.3</h2>
+        <ul>
+          <li><strong>Hotkeys:</strong> Fixed event pass-through ownership so other apps no longer see phantom ⌘⇧3/4/5 presses</li>
+          <li><strong>Save reliability:</strong> Direct-copy saves now surface failures instead of silently dropping the screenshot</li>
+          <li><strong>Drag out:</strong> Drag-exporting from the overlay no longer errors on certain destinations</li>
+          <li><strong>Window picker:</strong> First click after ⌘⇧5 now reliably selects a window</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.7.3/Shotter-1.7.3.dmg"
+        length="2997286"
+        type="application/octet-stream"
+        sparkle:edSignature="D9oxfPx5jUbqwXIQAZOVf+B+z/Dwq7s9O4nvAfWbsu/1vh1zmwsyYaBc/YhlyUjsAV01H1V4D0z+GV6hJhMfDA=="
+      />
+    </item>
+    <item>
       <title>Version 1.7.2</title>
       <pubDate>Wed, 26 Mar 2026 14:30:00 -0400</pubDate>
       <sparkle:version>172</sparkle:version>
