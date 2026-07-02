@@ -9,6 +9,7 @@ class HotkeyManager {
     private var runLoopSource: CFRunLoopSource?
     private var shortcutObserver: NSObjectProtocol?
     private var activationObserver: NSObjectProtocol?
+    private var permissionRetryTimer: Timer?
     
     private let onFullscreen: (Bool) -> Void  // Bool = directCopy (Option held)
     private let onArea: (Bool) -> Void
@@ -48,6 +49,7 @@ class HotkeyManager {
     
     deinit {
         removeEventTap()
+        stopPermissionRetryTimer()
         if let observer = shortcutObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -90,12 +92,38 @@ class HotkeyManager {
         guard Permissions.checkAccessibility() else {
             removeEventTap()
             logger.info("Accessibility unavailable - hotkey event tap removed")
+            // Keep polling so hotkeys come back as soon as permission is re-granted
+            // (a menu-bar app rarely becomes "active", so the activation observer
+            // alone never fires for grants made in System Settings).
+            startPermissionRetryTimer()
             return
         }
 
         if eventTap == nil {
             setupEventTap()
         }
+    }
+
+    private func startPermissionRetryTimer() {
+        guard permissionRetryTimer == nil else { return }
+        permissionRetryTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+            Permissions.invalidateCache()
+            guard Permissions.checkAccessibility() else { return }
+            self.setupEventTap()
+            if self.eventTap != nil {
+                self.stopPermissionRetryTimer()
+                logger.info("Accessibility granted - hotkey event tap registered without relaunch")
+            }
+        }
+    }
+
+    private func stopPermissionRetryTimer() {
+        permissionRetryTimer?.invalidate()
+        permissionRetryTimer = nil
     }
     
     private func setupEventTap() {
@@ -104,6 +132,7 @@ class HotkeyManager {
         // Check accessibility permissions
         guard Permissions.checkAccessibility() else {
             logger.warning("Accessibility permission not granted - hotkeys disabled")
+            startPermissionRetryTimer()
             return
         }
         
@@ -194,7 +223,11 @@ class HotkeyManager {
                 }
                 return nil
             default:
-                break
+                // Swallow capture shortcuts while a selector is up — re-entering
+                // capture would orphan the active selector and hang its task.
+                if matchesAnyCaptureShortcut(keyCode: keyCode, flags: flags) {
+                    return nil
+                }
             }
         }
 
@@ -243,6 +276,12 @@ class HotkeyManager {
         return Unmanaged.passUnretained(event)
     }
     
+    private func matchesAnyCaptureShortcut(keyCode: Int, flags: CGEventFlags) -> Bool {
+        [fullscreenShortcut, areaShortcut, windowShortcut].contains { shortcut in
+            shortcut.isEnabled && matchesShortcut(keyCode: keyCode, flags: flags, shortcut: shortcut, allowExtraOption: true)
+        }
+    }
+
     private func matchesShortcut(keyCode: Int, flags: CGEventFlags, shortcut: ShortcutConfig, allowExtraOption: Bool = false) -> Bool {
         guard keyCode == shortcut.keyCode else { return false }
 

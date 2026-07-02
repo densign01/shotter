@@ -56,6 +56,7 @@ class AreaSelectorWindow {
     private var coordinator: AreaSelectionCoordinator?
     private var hasCompleted = false
     private var localKeyMonitor: Any?
+    private var hasPushedCursor = false
     
     init(screenCaptures: [(screen: NSScreen, image: CGImage)], completion: @escaping (AreaSelectorResult) -> Void) {
         self.completion = completion
@@ -88,10 +89,18 @@ class AreaSelectorWindow {
     
     func show() {
         NSCursor.crosshair.push()
+        hasPushedCursor = true
         installLocalKeyMonitor()
         for window in overlayWindows {
             window.show()
         }
+    }
+
+    deinit {
+        // Safety net: if the selector is deallocated without completing,
+        // still release the key monitor and balance the cursor stack —
+        // otherwise both leak for the app's lifetime.
+        teardown()
     }
 
     func toggleMode() {
@@ -119,13 +128,21 @@ class AreaSelectorWindow {
 
     private func complete(with result: AreaSelectorResult) {
         hasCompleted = true
-        removeLocalKeyMonitor()
-        NSCursor.pop()
+        teardown()
         for window in overlayWindows {
             window.orderOut(nil)
         }
         completion?(result)
         completion = nil
+    }
+
+    /// Single teardown path — idempotent, invoked from both complete() and deinit.
+    private func teardown() {
+        removeLocalKeyMonitor()
+        if hasPushedCursor {
+            NSCursor.pop()
+            hasPushedCursor = false
+        }
     }
 
     private func installLocalKeyMonitor() {
@@ -501,8 +518,10 @@ class AreaSelectionView: NSView {
                 NSGraphicsContext.restoreGraphicsState()
             }
 
-            // Draw border around selection (only on the screen where selection is visible)
-            if selectionRect.intersects(bounds) && bounds.contains(selectionRect) {
+            // Draw border around selection — each screen draws its portion,
+            // clipped naturally to its own bounds, so cross-display selections
+            // keep a visible outline.
+            if selectionRect.intersects(bounds) {
                 NSColor.white.setStroke()
                 let borderPath = NSBezierPath(rect: selectionRect)
                 borderPath.lineWidth = 2
@@ -748,12 +767,17 @@ class AreaSelectionView: NSView {
         dimensionLabel?.stringValue = text
         dimensionLabel?.sizeToFit()
         
-        // Position below selection
+        // Position below selection; flip inside when it would clip at the
+        // screen edge, and clamp horizontally so it stays readable.
         if let label = dimensionLabel {
             var labelFrame = label.frame
             labelFrame.size.width += 12
             labelFrame.origin.x = rect.midX - labelFrame.width / 2
             labelFrame.origin.y = rect.minY - labelFrame.height - 8
+            if labelFrame.origin.y < 4 {
+                labelFrame.origin.y = rect.minY + 8
+            }
+            labelFrame.origin.x = min(max(labelFrame.origin.x, 4), bounds.maxX - labelFrame.width - 4)
             label.frame = labelFrame
         }
     }
