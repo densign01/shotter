@@ -94,16 +94,25 @@ class AnnotationCanvasView: NSView {
         // Clear background
         context.setFillColor(NSColor.controlBackgroundColor.cgColor)
         context.fill(bounds)
-        
-        // Calculate image position (centered)
-        let imageRect = imageRectInView()
-        
-        // Draw checkerboard pattern behind image (for transparency)
-        drawCheckerboard(in: imageRect, context: context)
-        
-        // Draw base image
-        state.baseImage.draw(in: imageRect)
-        
+
+        // Resolve beautify geometry (screenshot content rect + frame).
+        let layout = beautifyLayout(viewSize: bounds.size, imageSize: state.imageSize, style: state.background)
+        scale = layout.scale
+        let imageRect = layout.contentRect
+
+        if state.background.isActive {
+            // Composite background, shadow, and window chrome around the screenshot.
+            BackgroundRenderer.drawBeautified(
+                in: context, layout: layout, style: state.background, imageSize: state.imageSize
+            ) { rect in
+                state.baseImage.draw(in: rect)
+            }
+        } else {
+            // Checkerboard behind image (for transparency), then the screenshot.
+            drawCheckerboard(in: imageRect, context: context)
+            state.baseImage.draw(in: imageRect)
+        }
+
         // Draw blur regions
         for anyAnnotation in state.annotations {
             if let blurAnnotation = anyAnnotation.annotation as? BlurAnnotation {
@@ -161,9 +170,9 @@ class AnnotationCanvasView: NSView {
     private func imageRectInView() -> CGRect {
         guard let state = state else { return .zero }
 
-        let imageRect = annotationImageRect(in: bounds.size, imageSize: state.imageSize)
-        scale = imageRect.width / state.imageSize.width
-        return imageRect
+        let layout = beautifyLayout(viewSize: bounds.size, imageSize: state.imageSize, style: state.background)
+        scale = layout.scale
+        return layout.contentRect
     }
     
     private func drawCheckerboard(in rect: CGRect, context: CGContext) {

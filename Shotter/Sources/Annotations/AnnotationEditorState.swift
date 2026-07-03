@@ -20,6 +20,12 @@ class AnnotationEditorState: ObservableObject {
     @Published var displayScale: CGFloat = 1
     @Published private(set) var canvasFocusRequestID: Int = 0
 
+    /// Beautify presentation frame (background, padding, corners, shadow, window
+    /// chrome) composited around the annotated screenshot. Persisted between captures.
+    @Published var background: BackgroundStyle = BackgroundStore.load() {
+        didSet { BackgroundStore.save(background) }
+    }
+
     // Modifier keys
     var isShiftKeyHeld: Bool = false
     
@@ -53,7 +59,28 @@ class AnnotationEditorState: ObservableObject {
 
     /// Whether the editor has changes worth prompting about on close
     var hasUnsavedChanges: Bool {
-        !annotations.isEmpty || hasBeenCropped
+        !annotations.isEmpty || hasBeenCropped || background.isActive
+    }
+
+    /// Pixel dimensions of the exported image (beautify frame included).
+    var outputPixelSize: CGSize {
+        let px = baseImagePixelScale
+        if !background.isActive {
+            return CGSize(width: (imageSize.width * px).rounded(),
+                          height: (imageSize.height * px).rounded())
+        }
+        let refDim = max(imageSize.width, imageSize.height)
+        let padPts = CGFloat(background.paddingFraction) * refDim
+        let titlePts = background.titleBarHeight(imageWidth: imageSize.width)
+        return CGSize(width: ((imageSize.width + 2 * padPts) * px).rounded(),
+                      height: ((imageSize.height + titlePts + 2 * padPts) * px).rounded())
+    }
+
+    /// Retina pixel density of the base screenshot (2.0 on most displays).
+    private var baseImagePixelScale: CGFloat {
+        guard let cg = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              imageSize.width > 0 else { return 1 }
+        return max(1, CGFloat(cg.width) / imageSize.width)
     }
 
     // Cached CIContext for blur operations (expensive to create)
@@ -391,8 +418,16 @@ class AnnotationEditorState: ObservableObject {
 
     // MARK: - Rendering
     
-    /// Render the final image with all annotations
+    /// Render the final exported image: annotations flattened onto the
+    /// screenshot, then wrapped in the beautify frame (if active).
     func renderFinalImage() -> NSImage? {
+        guard let annotated = renderAnnotatedScreenshot() else { return nil }
+        guard background.isActive else { return annotated }
+        return BackgroundRenderer.renderBeautified(annotated: annotated, imageSize: imageSize, style: background)
+    }
+
+    /// Render the screenshot with all annotations flattened, at native size.
+    private func renderAnnotatedScreenshot() -> NSImage? {
         let size = baseImage.size
         
         let image = NSImage(size: size)
