@@ -40,6 +40,7 @@ class OverlayController {
         onCopy: @escaping () -> Void,
         onSave: @escaping () -> Void,
         onAnnotate: @escaping () -> Void,
+        onPin: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) -> () -> Void {
         // Cap the stack; drop the oldest overlay when full
@@ -54,6 +55,7 @@ class OverlayController {
             onCopy: onCopy,
             onSave: onSave,
             onAnnotate: onAnnotate,
+            onPin: onPin,
             onDelete: onDelete
         )
         window.onRequestDismiss = { [weak self, weak window] in
@@ -227,6 +229,7 @@ class OverlayWindow: NSPanel, NSDraggingSource {
         onCopy: @escaping () -> Void,
         onSave: @escaping () -> Void,
         onAnnotate: @escaping () -> Void,
+        onPin: @escaping () -> Void,
         onDelete: @escaping () -> Void
     ) {
         self.image = image
@@ -237,9 +240,9 @@ class OverlayWindow: NSPanel, NSDraggingSource {
         let overlayHeight = Self.overlayHeight(for: image)
 
         // Define button exclusion zones (in window coordinates, origin bottom-left)
-        // Action bar: top-right corner (4 buttons)
+        // Action bar: top-right corner (5 buttons)
         let actionBarWidth: CGFloat = 50
-        let actionBarHeight: CGFloat = 156
+        let actionBarHeight: CGFloat = 192
         self.actionBarRect = NSRect(
             x: overlayWidth - actionBarWidth - OverlayLayout.actionBarOuterPadding,
             y: overlayHeight - actionBarHeight - OverlayLayout.actionBarOuterPadding,
@@ -315,6 +318,10 @@ class OverlayWindow: NSPanel, NSDraggingSource {
             onSave: onSave,
             onAnnotate: { [weak self] in
                 onAnnotate()
+                self?.requestDismiss()
+            },
+            onPin: { [weak self] in
+                onPin()
                 self?.requestDismiss()
             },
             onDelete: { [weak self] in
@@ -540,6 +547,7 @@ struct OverlayView: View {
     let onCopy: () -> Void
     let onSave: () -> Void
     let onAnnotate: () -> Void
+    let onPin: () -> Void
     let onDelete: () -> Void
     let onPauseDismiss: () -> Void
     let onResumeDismiss: () -> Void
@@ -580,6 +588,9 @@ struct OverlayView: View {
                 OverlayActionButton(systemName: "pencil.tip.crop.circle", action: onAnnotate)
                     .help("Annotate")
                     .accessibilityLabel(Text("Annotate"))
+                OverlayActionButton(systemName: "pin", action: onPin)
+                    .help("Pin to screen")
+                    .accessibilityLabel(Text("Pin to screen"))
                 // Show "Discard" when no file exists, "Move to Trash" when file exists
                 OverlayDeleteButton(action: onDelete)
                     .help(hasSavedFile ? "Move to Trash" : "Discard")
@@ -685,6 +696,7 @@ struct ActiveVisualEffectView: NSViewRepresentable {
         onCopy: {},
         onSave: {},
         onAnnotate: {},
+        onPin: {},
         onDelete: {},
         onPauseDismiss: {},
         onResumeDismiss: {},

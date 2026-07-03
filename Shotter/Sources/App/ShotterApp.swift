@@ -35,6 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyManager: HotkeyManager?
     private var captureEngine: CaptureEngine?
     private var overlayController: OverlayController?
+    private let pinnedWindowController = PinnedWindowController()
     private var preferencesWindow: NSWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -200,6 +201,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         DebugLogger.log("Overlay annotate clicked (savedURL available)")
                         self.openAnnotationEditor(image: image, savedURL: savedURL, preferredScreen: preferredScreen)
                     },
+                    onPin: {
+                        self.pinnedWindowController.pin(image: image, near: preferredScreen)
+                    },
                     onDelete: {
                         self.moveToTrash(savedURL)
                     }
@@ -239,6 +243,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onAnnotate: {
                 DebugLogger.log("Overlay annotate clicked (manual save mode)")
                 self.openAnnotationEditor(image: image, savedURL: nil, preferredScreen: preferredScreen)
+            },
+            onPin: {
+                self.pinnedWindowController.pin(image: image, near: preferredScreen)
             },
             onDelete: {
                 // No file exists - the overlay dismisses itself
