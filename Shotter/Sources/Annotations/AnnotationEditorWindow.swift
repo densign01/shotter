@@ -348,7 +348,7 @@ struct AnnotationEditorView: View {
                     if state.editingTextAnnotationId != nil {
                         TextEditorOverlay(
                             state: state,
-                            imageRect: annotationImageRect(in: geometry.size, imageSize: state.imageSize),
+                            imageRect: beautifyLayout(viewSize: geometry.size, imageSize: state.imageSize, style: state.background).contentRect,
                             scale: calculateScale(for: geometry.size)
                         )
                     }
@@ -369,15 +369,9 @@ struct AnnotationEditorView: View {
     }
     
     private func calculateScale(for viewSize: CGSize) -> CGFloat {
-        let imageSize = state.imageSize
-        let imageAspect = imageSize.width / imageSize.height
-        let viewAspect = viewSize.width / viewSize.height
-        
-        if imageAspect > viewAspect {
-            return viewSize.width / imageSize.width
-        } else {
-            return viewSize.height / imageSize.height
-        }
+        // The screenshot's on-screen zoom equals the beautify layout scale
+        // (identical to a plain aspect-fit when beautify is inactive).
+        beautifyLayout(viewSize: viewSize, imageSize: state.imageSize, style: state.background).scale
     }
 }
 
@@ -410,6 +404,9 @@ struct AnnotationToolbar: View {
                 RoundedRectangle(cornerRadius: 9)
                     .stroke(Color.primary.opacity(0.08), lineWidth: 1)
             )
+
+            // Beautify / background frame
+            BackgroundButton(state: state)
 
             Spacer()
 
@@ -758,6 +755,16 @@ struct ColorPillButton: View {
 struct EditorStatusBar: View {
     @ObservedObject var state: AnnotationEditorState
 
+    /// Beautified canvas size in the screenshot's own units (points).
+    private var displaySize: CGSize {
+        let img = state.imageSize
+        guard state.background.isActive else { return img }
+        let refDim = max(img.width, img.height)
+        let pad = CGFloat(state.background.paddingFraction) * refDim
+        let title = state.background.titleBarHeight(imageWidth: img.width)
+        return CGSize(width: img.width + 2 * pad, height: img.height + title + 2 * pad)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             // Zoom percentage (bottom-left)
@@ -775,12 +782,13 @@ struct EditorStatusBar: View {
 
             Spacer()
 
-            // Image dimensions (bottom-right)
-            Text("\(Int(state.imageSize.width.rounded())) × \(Int(state.imageSize.height.rounded()))")
+            // Output dimensions (bottom-right) — includes beautify frame when active
+            Text("\(Int(displaySize.width.rounded())) × \(Int(displaySize.height.rounded()))")
                 .font(.system(size: 11, design: .rounded))
                 .monospacedDigit()
                 .foregroundColor(.secondary)
                 .frame(minWidth: 52, alignment: .trailing)
+                .help(state.background.isActive ? "Exported size (with background)" : "Screenshot size")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
