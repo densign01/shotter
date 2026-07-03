@@ -1,37 +1,110 @@
 import AppKit
 import SwiftUI
 
+/// An AppKit-backed text field that reliably grabs keyboard focus when it
+/// appears. SwiftUI's @FocusState loses the race against the canvas NSView
+/// (which is the window's first responder), so we claim first responder
+/// directly once the field is in the window (#69).
+private struct AnnotationTextField: NSViewRepresentable {
+    @Binding var text: String
+    let fontSize: CGFloat
+    let onCommit: () -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.stringValue = text
+        field.placeholderString = "Enter text"
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .systemFont(ofSize: fontSize, weight: .bold)
+        field.textColor = .white
+        field.lineBreakMode = .byClipping
+        field.cell?.wraps = false
+        field.cell?.isScrollable = true
+        field.delegate = context.coordinator
+
+        DispatchQueue.main.async {
+            guard let window = field.window else { return }
+            window.makeFirstResponder(field)
+            if let editor = field.currentEditor() as? NSTextView {
+                editor.insertionPointColor = .white
+                editor.selectedRange = NSRange(location: field.stringValue.count, length: 0)
+            }
+        }
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        context.coordinator.parent = self
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        nsView.font = .systemFont(ofSize: fontSize, weight: .bold)
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: AnnotationTextField
+
+        init(_ parent: AnnotationTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)):
+                parent.onCommit()
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                parent.onCancel()
+                return true
+            default:
+                return false
+            }
+        }
+    }
+}
+
 /// A text field overlay for editing text annotations
 struct TextEditorOverlay: View {
     @ObservedObject var state: AnnotationEditorState
     let imageRect: CGRect
     let scale: CGFloat
-    
+
     @State private var editText: String = ""
-    @FocusState private var isFocused: Bool
-    
+
     var body: some View {
         if let editingId = state.editingTextAnnotationId,
            let anyAnnotation = state.annotations.first(where: { $0.id == editingId }),
            let textAnnotation = anyAnnotation.annotation as? TextAnnotation {
-            
+
             let viewBounds = convertToViewCoordinates(textAnnotation.bounds)
-            
+
             ZStack {
                 // Semi-transparent overlay
                 Color.black.opacity(0.3)
                     .onTapGesture {
                         finishEditing()
                     }
-                
+
                 // Text field positioned at annotation location
                 VStack(spacing: 8) {
-                    TextField("Enter text", text: $editText, onCommit: {
-                        finishEditing()
-                    })
-                    .textFieldStyle(.plain)
-                    .font(.system(size: state.fontSize, weight: .bold))
-                    .foregroundColor(.white)
+                    AnnotationTextField(
+                        text: $editText,
+                        fontSize: state.fontSize,
+                        onCommit: { finishEditing() },
+                        onCancel: { cancelEditing() }
+                    )
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
@@ -39,14 +112,13 @@ struct TextEditorOverlay: View {
                             .fill(Color(state.currentColor))
                     )
                     .frame(minWidth: 100, maxWidth: 400)
-                    .focused($isFocused)
-                    
+
                     HStack(spacing: 12) {
                         Button("Cancel") {
                             cancelEditing()
                         }
                         .keyboardShortcut(.escape, modifiers: [])
-                        
+
                         Button("Done") {
                             finishEditing()
                         }
@@ -61,7 +133,6 @@ struct TextEditorOverlay: View {
             }
             .onAppear {
                 editText = textAnnotation.text
-                isFocused = true
             }
         }
     }
