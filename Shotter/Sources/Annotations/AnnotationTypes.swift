@@ -403,7 +403,7 @@ struct TextAnnotation: Annotation {
         self.createdAt = Date()
         
         // Calculate initial bounds based on text size
-        let font = NSFont(name: fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
         let attributes: [NSAttributedString.Key: Any] = [.font: font]
         let textSize = (text as NSString).size(withAttributes: attributes)
         
@@ -427,7 +427,7 @@ struct TextAnnotation: Annotation {
         }
         
         // Draw text
-        let font = NSFont(name: fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center
         
@@ -457,7 +457,7 @@ struct TextAnnotation: Annotation {
     }
     
     mutating func updateBoundsForText() {
-        let font = NSFont(name: fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
         let attributes: [NSAttributedString.Key: Any] = [.font: font]
         let textSize = (text as NSString).size(withAttributes: attributes)
         

@@ -185,6 +185,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Auto-save was attempted - handle success or failure
             switch result! {
             case .success(let savedURL):
+                // The overlay dismisses itself on annotate/delete/copy actions.
                 self.overlayController?.showOverlay(
                     image: image,
                     savedURL: savedURL,
@@ -197,7 +198,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     },
                     onAnnotate: {
                         DebugLogger.log("Overlay annotate clicked (savedURL available)")
-                        self.overlayController?.dismissOverlay()
                         self.openAnnotationEditor(image: image, savedURL: savedURL, preferredScreen: preferredScreen)
                     },
                     onDelete: {
@@ -214,7 +214,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Shows overlay with manual save functionality (when auto-save is disabled)
     private func showOverlayWithManualSave(image: NSImage, preferredScreen: NSScreen?) {
-        self.overlayController?.showOverlay(
+        // Captured after showOverlay returns; dismisses only this overlay
+        // (other stacked overlays stay up).
+        var dismissThisOverlay: (() -> Void)?
+
+        let dismiss = self.overlayController?.showOverlay(
             image: image,
             savedURL: nil,
             preferredScreen: preferredScreen,
@@ -222,27 +226,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.copyToClipboard(image, fileURL: nil)
             },
             onSave: {
-                // Manual save: save the file, then dismiss overlay
+                // Manual save: save the file, then dismiss this overlay
                 let result = self.saveImage(image)
                 switch result {
                 case .success(let url):
                     logger.info("Manual save completed: \(url.path)")
-                    self.overlayController?.dismissOverlay()
+                    dismissThisOverlay?()
                 case .failure(let error):
                     self.showSaveErrorAlert(error: error)
                 }
             },
             onAnnotate: {
                 DebugLogger.log("Overlay annotate clicked (manual save mode)")
-                self.overlayController?.dismissOverlay()
                 self.openAnnotationEditor(image: image, savedURL: nil, preferredScreen: preferredScreen)
             },
             onDelete: {
-                // No file exists - just discard by dismissing overlay
+                // No file exists - the overlay dismisses itself
                 logger.info("Discarding unsaved screenshot")
-                self.overlayController?.dismissOverlay()
             }
         )
+        dismissThisOverlay = dismiss
     }
     
     private enum SaveError: LocalizedError {

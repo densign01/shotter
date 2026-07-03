@@ -37,6 +37,25 @@ class CaptureEngine {
     private var activeAreaSelector: AreaSelectorWindow?
     private var activeWindowSelector: WindowSelectorController?
 
+    // Guards against re-entrant captures (e.g. pressing the hotkey twice),
+    // which would orphan the active selector and permanently hang its task.
+    // Only read/written on the main actor.
+    private var isCaptureFlowActive = false
+
+    /// Atomically claim the capture flow. Returns false if a capture is already in progress.
+    @MainActor
+    private func beginCaptureFlow() -> Bool {
+        guard !isCaptureFlowActive else { return false }
+        isCaptureFlowActive = true
+        return true
+    }
+
+    private func endCaptureFlow() {
+        Task { @MainActor in
+            self.isCaptureFlowActive = false
+        }
+    }
+
     // Pre-capture cache for preserving menus/tooltips during hotkey capture
     private var preCapturedScreens: [(screen: NSScreen, image: CGImage)]?
     private var preCaptureTimestamp: Date?
@@ -108,6 +127,10 @@ class CaptureEngine {
 
     /// Capture the display at cursor position (default behavior)
     func captureFullscreen() async -> CaptureResult? {
+        guard await MainActor.run(body: { !isCaptureFlowActive }) else {
+            logger.info("Ignoring fullscreen capture - a selector is already active")
+            return nil
+        }
         guard let display = await getDisplayAtCursor() else {
             logger.warning("No display available for fullscreen capture")
             return nil
@@ -130,7 +153,13 @@ class CaptureEngine {
 
     private func captureDisplayCGImage(_ display: CaptureDisplay) async -> CGImage? {
         let scaleFactor = display.scaleFactor
-        let filter = SCContentFilter(display: display.scDisplay, excludingWindows: [])
+        // Exclude Shotter's own windows (post-capture overlay thumbnail, panels)
+        // so they never appear baked into the screenshot.
+        let ownPID = pid_t(ProcessInfo.processInfo.processIdentifier)
+        let ownWindows = availableContent?.windows.filter {
+            $0.owningApplication?.processID == ownPID
+        } ?? []
+        let filter = SCContentFilter(display: display.scDisplay, excludingWindows: ownWindows)
         let config = SCStreamConfiguration()
 
         config.width = Int(CGFloat(display.scDisplay.width) * scaleFactor)
@@ -196,6 +225,12 @@ class CaptureEngine {
     // MARK: - Area Capture
 
     func captureArea() async -> CaptureResult? {
+        guard await beginCaptureFlow() else {
+            logger.info("Ignoring area capture - capture already in progress")
+            return nil
+        }
+        defer { endCaptureFlow() }
+
         let displays = await getAvailableDisplays()
         var screenCaptures: [(screen: NSScreen, image: CGImage)]
 
@@ -438,6 +473,12 @@ class CaptureEngine {
 
     /// Show window picker and capture selected window
     func captureWindowInteractive() async -> CaptureResult? {
+        guard await beginCaptureFlow() else {
+            logger.info("Ignoring window capture - capture already in progress")
+            return nil
+        }
+        defer { endCaptureFlow() }
+
         guard let window = await showWindowSelector() else {
             return nil
         }

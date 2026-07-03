@@ -60,45 +60,62 @@ struct TextEditorOverlay: View {
                 )
             }
             .onAppear {
-                editText = textAnnotation.text == "Text" ? "" : textAnnotation.text
+                editText = textAnnotation.text
                 isFocused = true
             }
         }
     }
-    
+
     private func convertToViewCoordinates(_ imageBounds: CGRect) -> CGRect {
+        // Annotation bounds are bottom-left origin (y-up, matching the
+        // non-flipped canvas); SwiftUI positions are top-left origin (y-down).
+        // Flip Y so the editor appears exactly where the user clicked.
         CGRect(
             x: imageRect.origin.x + imageBounds.origin.x * scale,
-            y: imageRect.origin.y + imageBounds.origin.y * scale,
+            y: imageRect.maxY - imageBounds.maxY * scale,
             width: imageBounds.width * scale,
             height: imageBounds.height * scale
         )
     }
-    
+
+    /// A freshly placed annotation still has its empty placeholder text.
+    private func isNewAnnotation(_ id: AnnotationID) -> Bool {
+        guard let anyAnnotation = state.annotations.first(where: { $0.id == id }),
+              let textAnnotation = anyAnnotation.annotation as? TextAnnotation else {
+            return false
+        }
+        return textAnnotation.text.isEmpty
+    }
+
     private func finishEditing() {
         guard let editingId = state.editingTextAnnotationId else { return }
-        
+        let isNew = isNewAnnotation(editingId)
+
         if editText.isEmpty {
-            // Remove empty text annotations
-            state.removeAnnotation(editingId)
+            // Remove empty text annotations; for a never-committed placeholder
+            // also drop its creation checkpoint so undo can't resurrect it
+            if isNew {
+                state.removeFailedCreation(editingId)
+            } else {
+                state.removeAnnotation(editingId)
+            }
         } else {
-            state.updateTextAnnotation(id: editingId, text: editText)
+            // Creation already pushed a checkpoint for new annotations, so
+            // create + first text commit undoes as a single action
+            state.updateTextAnnotation(id: editingId, text: editText, recordUndo: !isNew)
         }
-        
+
         state.finishTextEditing()
     }
-    
+
     private func cancelEditing() {
         guard let editingId = state.editingTextAnnotationId else { return }
-        
-        // Check if this is a new annotation (text is "Text")
-        if let anyAnnotation = state.annotations.first(where: { $0.id == editingId }),
-           let textAnnotation = anyAnnotation.annotation as? TextAnnotation,
-           textAnnotation.text == "Text" {
-            // Remove the placeholder
-            state.removeAnnotation(editingId)
+
+        // Remove a never-committed placeholder without leaving an undo entry
+        if isNewAnnotation(editingId) {
+            state.removeFailedCreation(editingId)
         }
-        
+
         state.finishTextEditing()
     }
 }

@@ -28,9 +28,19 @@ class AnnotationEditorState: ObservableObject {
     ]
     
     // MARK: - Undo/Redo
-    
-    private var undoStack: [[AnyAnnotation]] = []
-    private var redoStack: [[AnyAnnotation]] = []
+
+    /// Full editor snapshot so undo can restore crops, counter numbering,
+    /// and the base image — not just the annotation list.
+    private struct EditorSnapshot {
+        let annotations: [AnyAnnotation]
+        let baseImage: NSImage
+        let imageSize: CGSize
+        let hasBeenCropped: Bool
+        let nextCounterNumber: Int
+    }
+
+    private var undoStack: [EditorSnapshot] = []
+    private var redoStack: [EditorSnapshot] = []
     private let maxUndoLevels = 50
     
     // MARK: - Base Image
@@ -131,6 +141,17 @@ class AnnotationEditorState: ObservableObject {
             selectedAnnotationId = nil
         }
     }
+
+    /// Remove an annotation created by an aborted gesture (too-small drag,
+    /// cancelled/empty text), also dropping the undo checkpoint its creation
+    /// pushed — so undo can't resurrect an invalid annotation.
+    func removeFailedCreation(_ id: AnnotationID) {
+        annotations.removeAll { $0.id == id }
+        if selectedAnnotationId == id {
+            selectedAnnotationId = nil
+        }
+        _ = undoStack.popLast()
+    }
     
     func selectAnnotation(_ id: AnnotationID?) {
         // Deselect previous
@@ -188,9 +209,35 @@ class AnnotationEditorState: ObservableObject {
     }
     
     // MARK: - Undo/Redo
-    
+
+    private func currentSnapshot() -> EditorSnapshot {
+        EditorSnapshot(
+            annotations: annotations,
+            baseImage: baseImage,
+            imageSize: imageSize,
+            hasBeenCropped: hasBeenCropped,
+            nextCounterNumber: nextCounterNumber
+        )
+    }
+
+    private func restore(_ snapshot: EditorSnapshot) {
+        baseImage = snapshot.baseImage
+        imageSize = snapshot.imageSize
+        hasBeenCropped = snapshot.hasBeenCropped
+        nextCounterNumber = snapshot.nextCounterNumber
+        // Clear stale isSelected flags baked into the snapshot so no
+        // annotation keeps a ghost selection border after restore.
+        annotations = snapshot.annotations.map { anyAnnotation in
+            var annotation = anyAnnotation.annotation
+            annotation.isSelected = false
+            return AnyAnnotation(annotation)
+        }
+        selectedAnnotationId = nil
+        cropRect = nil
+    }
+
     private func saveUndoState() {
-        undoStack.append(annotations)
+        undoStack.append(currentSnapshot())
         if undoStack.count > maxUndoLevels {
             undoStack.removeFirst()
         }
@@ -200,31 +247,34 @@ class AnnotationEditorState: ObservableObject {
     func saveUndoCheckpoint() {
         saveUndoState()
     }
-    
+
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
-    
+
     func undo() {
         guard let previousState = undoStack.popLast() else { return }
-        redoStack.append(annotations)
-        annotations = previousState
-        selectedAnnotationId = nil
+        redoStack.append(currentSnapshot())
+        restore(previousState)
     }
-    
+
     func redo() {
         guard let nextState = redoStack.popLast() else { return }
-        undoStack.append(annotations)
-        annotations = nextState
-        selectedAnnotationId = nil
+        undoStack.append(currentSnapshot())
+        restore(nextState)
     }
     
     // MARK: - Text Editing
     
-    func updateTextAnnotation(id: AnnotationID, text: String) {
+    /// Updates a text annotation's content. Pass `recordUndo: false` for the
+    /// first commit of a newly placed annotation — its creation already pushed
+    /// a checkpoint, so create + initial text is a single undoable action.
+    func updateTextAnnotation(id: AnnotationID, text: String, recordUndo: Bool = true) {
         guard let index = annotations.firstIndex(where: { $0.id == id }),
               var textAnnotation = annotations[index].annotation as? TextAnnotation else { return }
-        
-        saveUndoState()
+
+        if recordUndo {
+            saveUndoState()
+        }
         textAnnotation.text = text
         textAnnotation.updateBoundsForText()
         annotations[index] = AnyAnnotation(textAnnotation)
@@ -318,6 +368,10 @@ class AnnotationEditorState: ObservableObject {
             }
         }
 
+        // Checkpoint the pre-crop state so the crop itself is undoable
+        // (restores the original image, size, and annotation positions).
+        saveUndoState()
+
         // Apply changes
         baseImage = croppedImage
         imageSize = newSize
@@ -325,8 +379,6 @@ class AnnotationEditorState: ObservableObject {
         annotations = updatedAnnotations
         selectedAnnotationId = nil
         cropRect = nil
-        undoStack.removeAll()
-        redoStack.removeAll()
         setTool(.select)
     }
 

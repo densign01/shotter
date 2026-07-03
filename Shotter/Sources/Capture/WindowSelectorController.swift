@@ -233,8 +233,13 @@ class WindowSelectorView: NSView {
         guard localFrame.intersects(bounds) else { return }
         
         // Clear the window area
+        let previousOperation = NSGraphicsContext.current?.compositingOperation
+        NSGraphicsContext.current?.compositingOperation = .clear
         NSColor.clear.setFill()
         localFrame.intersection(bounds).fill()
+        if let previousOperation {
+            NSGraphicsContext.current?.compositingOperation = previousOperation
+        }
         
         // Draw highlight border
         NSColor.systemBlue.setStroke()

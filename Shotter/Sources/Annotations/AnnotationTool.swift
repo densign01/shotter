@@ -236,16 +236,16 @@ class ArrowTool: AnnotationTool {
     
     func mouseUp(at point: CGPoint, state: AnnotationEditorState) {
         guard var annotation = currentAnnotation else { return }
-        
+
         // If start and end are too close, remove the annotation
         let distance = hypot(point.x - annotation.startPoint.x, point.y - annotation.startPoint.y)
         if distance < 5 {
-            state.removeAnnotation(annotation.id)
+            state.removeFailedCreation(annotation.id)
         } else {
             annotation.isSelected = false
             state.updateAnnotation(annotation)
         }
-        
+
         startPoint = nil
         currentAnnotation = nil
     }
@@ -303,12 +303,12 @@ class RectangleTool: AnnotationTool {
         
         // If too small, remove
         if annotation.bounds.width < 5 || annotation.bounds.height < 5 {
-            state.removeAnnotation(annotation.id)
+            state.removeFailedCreation(annotation.id)
         } else {
             annotation.isSelected = false
             state.updateAnnotation(annotation)
         }
-        
+
         startPoint = nil
         currentAnnotation = nil
     }
@@ -365,12 +365,12 @@ class EllipseTool: AnnotationTool {
         guard var annotation = currentAnnotation else { return }
         
         if annotation.bounds.width < 5 || annotation.bounds.height < 5 {
-            state.removeAnnotation(annotation.id)
+            state.removeFailedCreation(annotation.id)
         } else {
             annotation.isSelected = false
             state.updateAnnotation(annotation)
         }
-        
+
         startPoint = nil
         currentAnnotation = nil
     }
@@ -412,12 +412,12 @@ class LineTool: AnnotationTool {
         
         let distance = hypot(point.x - annotation.startPoint.x, point.y - annotation.startPoint.y)
         if distance < 5 {
-            state.removeAnnotation(annotation.id)
+            state.removeFailedCreation(annotation.id)
         } else {
             annotation.isSelected = false
             state.updateAnnotation(annotation)
         }
-        
+
         startPoint = nil
         currentAnnotation = nil
     }
@@ -430,10 +430,11 @@ class TextTool: AnnotationTool {
     var cursor: NSCursor { .iBeam }
     
     func mouseDown(at point: CGPoint, state: AnnotationEditorState) {
-        // Create text annotation at click point
+        // Create text annotation at click point. The placeholder is empty —
+        // never a literal string that could be baked into a saved image.
         var annotation = TextAnnotation(
             position: point,
-            text: "Text",
+            text: "",
             strokeColor: .white,
             fontSize: state.fontSize,
             backgroundColor: state.currentColor
@@ -494,12 +495,12 @@ class BlurTool: AnnotationTool {
         guard var annotation = currentAnnotation else { return }
         
         if annotation.bounds.width < 10 || annotation.bounds.height < 10 {
-            state.removeAnnotation(annotation.id)
+            state.removeFailedCreation(annotation.id)
         } else {
             annotation.isSelected = false
             state.updateAnnotation(annotation)
         }
-        
+
         startPoint = nil
         currentAnnotation = nil
     }
@@ -626,7 +627,7 @@ class TextHighlightTool: AnnotationTool {
         guard let annotation = currentAnnotation else { return }
 
         if brushPath.count < 2 {
-            state.removeAnnotation(annotation.id)
+            state.removeFailedCreation(annotation.id)
         }
 
         brushPath = []

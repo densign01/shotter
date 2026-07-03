@@ -100,12 +100,16 @@ struct PreferencesView: View {
                         ))
                         Spacer()
                         if prefs.shortcutWindow.isEnabled {
-                            ShortcutBadge(shortcut: prefs.shortcutWindow)
-                            Button("Change") {
-                                recordingShortcut = .window
+                            if recordingShortcut == .window {
+                                ShortcutRecorder(shortcut: $prefs.shortcutWindow, onComplete: { recordingShortcut = nil })
+                            } else {
+                                ShortcutBadge(shortcut: prefs.shortcutWindow)
+                                Button("Change") {
+                                    recordingShortcut = .window
+                                }
+                                .buttonStyle(.borderless)
+                                .font(.caption)
                             }
-                            .buttonStyle(.borderless)
-                            .font(.caption)
                         }
                     }
                     Text("Optional: Skip area selection and go straight to window mode")
