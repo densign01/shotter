@@ -6,6 +6,28 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.8.0</title>
+      <pubDate>Fri, 03 Jul 2026 06:55:00 -0400</pubDate>
+      <sparkle:version>180</sparkle:version>
+      <sparkle:shortVersionString>1.8.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>New in 1.8.0</h2>
+        <ul>
+          <li><strong>Backgrounds &amp; frames:</strong> Wrap any screenshot in a gradient or solid background with padding, rounded corners, and a drop shadow. Optional macOS or browser window frames for share-ready shots.</li>
+          <li><strong>Pin to Screen:</strong> Keep a capture floating always-on-top. Drag it anywhere, copy or dismiss on hover, press Escape to unpin.</li>
+          <li><strong>Redesigned editor:</strong> Cleaner CleanShot-style toolbar with labeled Copy/Save buttons, a color picker dropdown, and a status bar showing zoom, drag hint, and live dimensions.</li>
+          <li><strong>Fix:</strong> Text tool now reliably focuses the input field when you click.</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.8.0/Shotter-1.8.0.dmg"
+        length="3120493"
+        type="application/octet-stream"
+        sparkle:edSignature="cfnr87hVvwLPfeS3+aa6uUMdwdjwlxbaMq5gSAq0JgoUrNyLO/ex1+38sqqNh0W+6ltBYbuKDQWpaGZww1evCA=="
+      />
+    </item>
+    <item>
       <title>Version 1.7.4</title>
       <pubDate>Thu, 02 Jul 2026 20:35:00 -0400</pubDate>
       <sparkle:version>174</sparkle:version>
