@@ -6,6 +6,28 @@
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
+      <title>Version 1.7.4</title>
+      <pubDate>Thu, 02 Jul 2026 20:35:00 -0400</pubDate>
+      <sparkle:version>174</sparkle:version>
+      <sparkle:shortVersionString>1.7.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+        <h2>What's Fixed in 1.7.4</h2>
+        <ul>
+          <li><strong>Capture:</strong> Hotkeys can no longer trigger overlapping captures; Shotter's own windows are excluded from screenshots; permissions granted mid-session now work without relaunching</li>
+          <li><strong>Overlay:</strong> Multiple screenshots now stack neatly (up to 5) instead of replacing each other; Escape dismisses; drag-out to slow targets like Mail no longer fails; copy shows a confirmation flash</li>
+          <li><strong>Editor:</strong> Undo/redo now covers crop and all tools reliably; text tool no longer bakes a "Text" placeholder into the image; text editor appears exactly where you clicked</li>
+          <li><strong>Selection:</strong> Dimension label stays readable near screen edges; selection border draws correctly at bounds</li>
+        </ul>
+      ]]></description>
+      <enclosure
+        url="https://github.com/densign01/shotter/releases/download/v1.7.4/Shotter-1.7.4.dmg"
+        length="3014727"
+        type="application/octet-stream"
+        sparkle:edSignature="4oYOJTbL2wR42yVV7N0MPTQE0dNo0wdX2TQzu/mDc/OuSXDx6LXX8BbyoB3Z3GDd2ejLf6u7xfXQP3AJSTASAg=="
+      />
+    </item>
+    <item>
       <title>Version 1.7.3</title>
       <pubDate>Fri, 24 Apr 2026 09:20:07 -0400</pubDate>
       <sparkle:version>173</sparkle:version>
