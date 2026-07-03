@@ -16,6 +16,8 @@ class AnnotationEditorState: ObservableObject {
     @Published var editingTextAnnotationId: AnnotationID?
     @Published var nextCounterNumber: Int = 1
     @Published var cropRect: CGRect? = nil
+    /// Current on-screen zoom of the image relative to its pixel size (1.0 = 100%). Surfaced for the status bar.
+    @Published var displayScale: CGFloat = 1
     @Published private(set) var canvasFocusRequestID: Int = 0
 
     // Modifier keys

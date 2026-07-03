@@ -332,37 +332,40 @@ struct AnnotationEditorView: View {
     let onCancel: () -> Void
     
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                // Toolbar
-                AnnotationToolbar(state: state, onSave: onSave, onCopy: onCopy, onCancel: onCancel)
-                
-                Divider()
-                
-                // Canvas
-                GeometryReader { geometry in
-                    ZStack {
-                        AnnotationCanvasRepresentable(state: state)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        
-                        // Text editor overlay
-                        if state.editingTextAnnotationId != nil {
-                            TextEditorOverlay(
-                                state: state,
-                                imageRect: annotationImageRect(in: geometry.size, imageSize: state.imageSize),
-                                scale: calculateScale(for: geometry.size)
-                            )
-                        }
+        VStack(spacing: 0) {
+            // Toolbar
+            AnnotationToolbar(state: state, onSave: onSave, onCopy: onCopy, onCancel: onCancel)
+
+            Divider()
+
+            // Canvas
+            GeometryReader { geometry in
+                ZStack {
+                    AnnotationCanvasRepresentable(state: state)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    // Text editor overlay
+                    if state.editingTextAnnotationId != nil {
+                        TextEditorOverlay(
+                            state: state,
+                            imageRect: annotationImageRect(in: geometry.size, imageSize: state.imageSize),
+                            scale: calculateScale(for: geometry.size)
+                        )
                     }
                 }
-                
-                // Bottom bar with tool options (always visible for consistent layout)
-                Divider()
-                ToolOptionsBar(state: state)
-                DragMeBar(state: state)
+                .onAppear { state.displayScale = calculateScale(for: geometry.size) }
+                .onChange(of: geometry.size) { _, newSize in
+                    state.displayScale = calculateScale(for: newSize)
+                }
             }
-            .background(Color(NSColor.controlBackgroundColor))
+
+            // Tool options + status bar (always visible for consistent layout)
+            Divider()
+            ToolOptionsBar(state: state)
+            Divider()
+            EditorStatusBar(state: state)
         }
+        .background(Color(NSColor.controlBackgroundColor))
     }
     
     private func calculateScale(for viewSize: CGSize) -> CGFloat {
@@ -388,8 +391,8 @@ struct AnnotationToolbar: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // Tool buttons
-            HStack(spacing: 4) {
+            // Segmented tool group
+            HStack(spacing: 2) {
                 ForEach(AnnotationToolType.allCases) { tool in
                     ToolButton(
                         tool: tool,
@@ -398,17 +401,20 @@ struct AnnotationToolbar: View {
                     )
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(3)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(NSColor.controlBackgroundColor))
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(Color.primary.opacity(0.05))
             )
-            
+            .overlay(
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+
             Spacer()
-            
+
             // Undo/Redo
-            HStack(spacing: 4) {
+            HStack(spacing: 2) {
                 HoverIconButton(icon: "arrow.uturn.backward", tooltip: "Undo (⌘Z)", action: { state.undo() })
                     .disabled(!state.canUndo)
 
@@ -417,23 +423,66 @@ struct AnnotationToolbar: View {
             }
 
             Divider()
-                .frame(height: 24)
+                .frame(height: 22)
 
-            // Action buttons (icon-only for compact layout)
-            HStack(spacing: 4) {
-                HoverIconButton(icon: "xmark", tooltip: "Cancel (Esc)", action: onCancel)
-                    .keyboardShortcut(.escape, modifiers: [])
+            // Action buttons — labeled for clarity
+            HoverIconButton(icon: "xmark", tooltip: "Cancel (Esc)", action: onCancel)
+                .keyboardShortcut(.escape, modifiers: [])
 
-                HoverIconButton(icon: "doc.on.doc", tooltip: "Copy & Save (⌘⇧C)", action: onCopy)
-                    .keyboardShortcut("c", modifiers: [.command, .shift])
+            TextActionButton(title: "Copy", icon: "doc.on.doc", tooltip: "Copy & Save (⌘⇧C)", action: onCopy)
+                .keyboardShortcut("c", modifiers: [.command, .shift])
 
-                HoverIconButton(icon: "square.and.arrow.down", tooltip: "Save (⌘S)", isPrimary: true, action: onSave)
-                    .keyboardShortcut("s", modifiers: .command)
-            }
+            TextActionButton(title: "Save", icon: "square.and.arrow.down", tooltip: "Save (⌘S)", isPrimary: true, action: onSave)
+                .keyboardShortcut("s", modifiers: .command)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(.bar)
+    }
+}
+
+// MARK: - Labeled Action Button
+
+struct TextActionButton: View {
+    let title: String
+    let icon: String
+    let tooltip: String
+    var isPrimary: Bool = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .fixedSize()
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(backgroundColor)
+            )
+            .foregroundColor(isPrimary ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .onHover { isHovered = $0 }
+        .help(tooltip)
+        .accessibilityLabel(Text(tooltip))
+    }
+
+    private var backgroundColor: Color {
+        if isPrimary {
+            return isHovered ? Color.accentColor.opacity(0.85) : Color.accentColor
+        }
+        return isHovered ? Color.primary.opacity(0.12) : Color.primary.opacity(0.06)
     }
 }
 
@@ -555,73 +604,23 @@ struct HoverIconButton: View {
     }
 }
 
-// MARK: - Color Swatch Button
-
-struct ColorSwatchButton: View {
-    let color: NSColor
-    let isSelected: Bool
-    let colorName: String
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Circle()
-                .fill(Color(color))
-                .frame(width: 22, height: 22)
-                .overlay(
-                    // Selection ring
-                    Circle()
-                        .stroke(Color.primary, lineWidth: isSelected ? 2 : 0)
-                        .frame(width: 26, height: 26)
-                )
-        }
-        .buttonStyle(.plain)
-        .shadow(color: .black.opacity(isHovered ? 0.5 : 0), radius: isHovered ? 4 : 0, y: isHovered ? 2 : 0)
-        .scaleEffect(isHovered ? 1.15 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isHovered)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .help(colorName)
-        .accessibilityLabel(Text(colorName))
-        .accessibilityValue(Text(isSelected ? "Selected" : "Not selected"))
-    }
-}
-
 // MARK: - Tool Options Bar
 
 struct ToolOptionsBar: View {
     @ObservedObject var state: AnnotationEditorState
 
-    private let presetColors: [NSColor] = [
-        .systemRed, .systemOrange, .systemYellow, .systemGreen,
-        .systemBlue, .systemPurple, .black, .white
-    ]
-
     private let strokeSizes: [CGFloat] = [1, 2, 3, 5, 8]
     private let fontSizes: [CGFloat] = [12, 16, 24, 32, 48]
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             // Tool-specific options (not for select, eraser, or crop tools)
             if ![.select, .eraser, .crop].contains(state.currentToolType) {
-                // Color swatches with selection ring and hover effect
-                HStack(spacing: 6) {
-                    ForEach(presetColors, id: \.self) { color in
-                        ColorSwatchButton(
-                            color: color,
-                            isSelected: state.currentColor == color,
-                            colorName: colorName(for: color)
-                        ) {
-                            state.setColor(color)
-                        }
-                    }
-                }
+                // Color pill dropdown (current color + quick swatches in a popover)
+                ColorPillButton(state: state)
 
                 Divider()
-                    .frame(height: 20)
+                    .frame(height: 18)
 
                 // Stroke size dropdown (not for text or counter)
                 if ![.text, .counter].contains(state.currentToolType) {
@@ -672,7 +671,7 @@ struct ToolOptionsBar: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .frame(height: 44)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(.bar)
     }
 
     private func closestStrokeSize(_ value: CGFloat) -> CGFloat {
@@ -681,20 +680,6 @@ struct ToolOptionsBar: View {
 
     private func closestFontSize(_ value: CGFloat) -> CGFloat {
         fontSizes.min(by: { abs($0 - value) < abs($1 - value) }) ?? 16
-    }
-
-    private func colorName(for color: NSColor) -> String {
-        switch color {
-        case .systemRed: return "Red"
-        case .systemOrange: return "Orange"
-        case .systemYellow: return "Yellow"
-        case .systemGreen: return "Green"
-        case .systemBlue: return "Blue"
-        case .systemPurple: return "Purple"
-        case .black: return "Black"
-        case .white: return "White"
-        default: return "Color"
-        }
     }
 
     private var keyboardHint: String {
@@ -728,24 +713,106 @@ struct ToolOptionsBar: View {
     }
 }
 
-// MARK: - Drag Me Bar
+// MARK: - Color Pill Button
 
-struct DragMeBar: View {
+struct ColorPillButton: View {
+    @ObservedObject var state: AnnotationEditorState
+
+    @State private var showingPicker = false
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: { showingPicker.toggle() }) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Color(state.currentColor))
+                    .frame(width: 16, height: 16)
+                    .overlay(Circle().stroke(Color.primary.opacity(0.2), lineWidth: 1))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.primary.opacity(isHovered ? 0.12 : 0.06))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Color")
+        .accessibilityLabel(Text("Color"))
+        .popover(isPresented: $showingPicker) {
+            ColorGridPicker(selectedColor: state.currentColor) { color in
+                state.setColor(color)
+                showingPicker = false
+            }
+            .padding()
+        }
+    }
+}
+
+// MARK: - Editor Status Bar
+
+struct EditorStatusBar: View {
     @ObservedObject var state: AnnotationEditorState
 
     var body: some View {
         HStack(spacing: 8) {
-            Spacer()
-            Image(systemName: "hand.draw")
-                .font(.system(size: 12))
+            // Zoom percentage (bottom-left)
+            Text("\(Int((state.displayScale * 100).rounded()))%")
+                .font(.system(size: 11, design: .rounded))
+                .monospacedDigit()
                 .foregroundColor(.secondary)
-            Text("Drag to any app")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .frame(minWidth: 52, alignment: .leading)
+                .accessibilityLabel(Text("Zoom \(Int((state.displayScale * 100).rounded())) percent"))
+
             Spacer()
+
+            // Floating drag handle (center)
+            DragPill(state: state)
+
+            Spacer()
+
+            // Image dimensions (bottom-right)
+            Text("\(Int(state.imageSize.width.rounded())) × \(Int(state.imageSize.height.rounded()))")
+                .font(.system(size: 11, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(.secondary)
+                .frame(minWidth: 52, alignment: .trailing)
         }
+        .padding(.horizontal, 14)
         .padding(.vertical, 6)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(.bar)
+    }
+}
+
+// MARK: - Drag Pill
+
+struct DragPill: View {
+    @ObservedObject var state: AnnotationEditorState
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "hand.draw")
+                .font(.system(size: 11))
+            Text("Drag to any app")
+                .font(.system(size: 11, weight: .medium))
+        }
+        .foregroundColor(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(
+            Capsule().fill(Color.primary.opacity(isHovered ? 0.12 : 0.07))
+        )
+        .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
+        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .onHover { isHovered = $0 }
+        .help("Drag the screenshot into any app")
         .onDrag {
             guard let image = state.renderFinalImage(),
                   let tiffData = image.tiffRepresentation,
